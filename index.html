@@ -176,6 +176,25 @@ main{padding:8px 16px}
 .export-btn{width:100%;padding:12px;border-radius:12px;background:#fff;border:1.5px solid var(--line);color:var(--brand-d);font-weight:700;margin-top:4px}
 .split-row{display:flex;align-items:center;gap:8px;font-size:14px}
 .split-row input{width:64px;text-align:center;padding:8px;border-radius:10px;border:1.5px solid var(--line)}
+/* ---------- Calendar ---------- */
+.cal-nav{display:flex;align-items:center;gap:8px;margin-bottom:10px}
+.cal-nav select{flex:1;padding:9px;border-radius:11px;border:1.5px solid var(--line);background:#fff;font-weight:700}
+.cal-nav .arw{font-size:20px;color:var(--brand);padding:4px 10px;background:#fff;border:1.5px solid var(--line);border-radius:11px}
+.cal-today{width:100%;padding:9px;border-radius:11px;background:var(--brand);color:#fff;font-weight:700;margin-bottom:12px}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{text-align:center;font-size:12px;font-weight:800;color:var(--muted);padding:4px 0}
+.cal-cell{aspect-ratio:1;border-radius:10px;background:#fff;border:1.5px solid var(--line);padding:3px;display:flex;flex-direction:column;align-items:center;justify-content:flex-start;position:relative}
+.cal-cell.empty{background:transparent;border:none}
+.cal-cell .dnum{font-size:13px;font-weight:700;margin-top:1px}
+.cal-cell.today{border-color:var(--brand);border-width:2px}
+.cal-cell.sel{background:var(--brand);}
+.cal-cell.sel .dnum{color:#fff}
+.cal-cell.other .dnum{color:#c9c3b5}
+.cal-dots{display:flex;gap:2px;flex-wrap:wrap;justify-content:center;margin-top:2px}
+.cal-dot{width:6px;height:6px;border-radius:50%}
+.cal-legend{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin:12px 0;font-size:12px;color:var(--muted)}
+.cal-legend span{display:flex;align-items:center;gap:4px}
+.cal-legend i{width:8px;height:8px;border-radius:50%;display:inline-block}
 </style>
 </head>
 <body>
@@ -240,6 +259,8 @@ let CUR_SEC = "home";       // הלשונית הפעילה
 let CUR_DIARY_DATE = null;  // תאריך היומן המוצג (null = היום)
 let DIARY_VIEW = "day";     // "day" או "month"
 let CUR_MONTH = null;       // חודש נבחר בארכיון (YYYY-MM); null = החודש הנוכחי
+let CAL_MONTH = null;       // חודש מוצג בלוח השנה (YYYY-MM); null = החודש הנוכחי
+let CAL_DATE = null;        // יום נבחר בלוח השנה (ISO); null = היום
 let lastUpdated = 0;
 let editing = false;        // מונע דריסה תוך כדי מילוי טופס
 
@@ -347,9 +368,12 @@ function seedIfEmpty(){
     {id:uid(),kid:"lavi",name:"קלמר לבית ספר",qty:"1",urgency:"mid",where:"dad",
      bought:false,createdBy:"גל",createdAt:Date.now()-1e6},
   ];
+  // דוגמה היסטורית: בדיקה שהייתה ביוני — כדי להדגים חזרה אחורה בלוח השנה
+  const june=todayISO().slice(0,4)+"-06-15";
   STATE.expenses=[
     {id:uid(),kid:"ema",date:todayISO(),category:"בריאות",amount:180,paidBy:"רחל",note:"תרופות",createdBy:"רחל",createdAt:Date.now()-9e5},
     {id:uid(),kid:"lavi",date:todayISO(),category:"חוגים",amount:320,paidBy:"גל",note:"חוג כדורגל",createdBy:"גל",createdAt:Date.now()-7e5},
+    {id:uid(),kid:"ema",date:june,category:"בריאות",amount:250,paidBy:"רחל",note:"בדיקת דם - ספירה מלאה",createdBy:"רחל",createdAt:Date.now()-25*864e5},
   ];
   const t=todayISO(), y=new Date(Date.now()-864e5).toISOString().slice(0,10);
   STATE.diary=[
@@ -358,7 +382,19 @@ function seedIfEmpty(){
     {id:uid(),kid:"ema",date:t,type:"health",mood:"😊 שמח/ה",temp:"",meds:"",diaper:"החלפה",note:"מצב רוח מעולה",time:"10:00",createdBy:"רחל",createdAt:Date.now()},
     {id:uid(),kid:"ema",date:y,type:"sleep",start:"20:00",end:"06:30",isNap:false,quality:"טובה",time:"20:00",createdBy:"גל",createdAt:Date.now()},
     {id:uid(),kid:"ema",date:y,type:"meal",meal:"ערב",what:"בקבוק",amount:"150 מ״ל",time:"19:00",createdBy:"גל",createdAt:Date.now()},
+    {id:uid(),kid:"ema",date:june,type:"health",mood:"😐 רגיל",temp:"37.1",meds:"",diaper:"",note:"יום הבדיקה בקופ״ח, הכל תקין",time:"09:30",createdBy:"רחל",createdAt:Date.now()-25*864e5},
   ];
+  // מסמך בדיקה לדוגמה (תמונה שנוצרת אוטומטית) — ניתן לפתוח מהלוח שנה או מהתיק
+  const fid="sample-june-checkup";
+  STATE.files=[{id:fid,kid:"ema",category:"בדיקות",title:"בדיקת דם - ספירה מלאה",
+    filename:"בדיקה-יוני.png",mime:"image/png",date:june,note:"תוצאות תקינות",createdBy:"רחל",createdAt:Date.now()-25*864e5}];
+  const c=document.createElement("canvas"); c.width=600; c.height=400; const ctx=c.getContext("2d");
+  ctx.fillStyle="#fff"; ctx.fillRect(0,0,600,400); ctx.fillStyle="#3c5f51"; ctx.fillRect(0,0,600,60);
+  ctx.fillStyle="#fff"; ctx.font="bold 26px Arial"; ctx.textAlign="center"; ctx.fillText("בדיקת דם - ספירה מלאה", 300, 40);
+  ctx.fillStyle="#2c3330"; ctx.font="18px Arial";
+  ["עמנואל · 15.06.2026","המוגלובין: 11.8 (תקין)","טסיות: 280 (תקין)","סה\"כ: הכל בטווח התקין ✓","(מסמך דוגמה)"].forEach((line,i)=>ctx.fillText(line,300,120+i*45));
+  fetch(FILE_NODE+"/"+fid+".json",{method:"PUT",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({data:c.toDataURL("image/png"),mime:"image/png"})});
   logActivity("נפתחה המערכת 🎉","🎉");
   pushCloud();
 }
@@ -369,6 +405,7 @@ function seedIfEmpty(){
 const SECTIONS=[
   {id:"home", label:"🏠 בית"},
   {id:"diary", label:"📔 יומן"},
+  {id:"calendar", label:"📆 לוח שנה"},
   {id:"tasks", label:"✅ משימות"},
   {id:"shopping", label:"🛒 קניות"},
   {id:"expenses", label:"💰 הוצאות"},
@@ -389,6 +426,7 @@ function render(){
   const m=document.getElementById("main");
   if(CUR_SEC==="home") m.innerHTML=viewHome();
   else if(CUR_SEC==="diary") m.innerHTML=viewDiary();
+  else if(CUR_SEC==="calendar") m.innerHTML=viewCalendar();
   else if(CUR_SEC==="tasks") m.innerHTML=viewTasks();
   else if(CUR_SEC==="shopping") m.innerHTML=viewShopping();
   else if(CUR_SEC==="expenses") m.innerHTML=viewExpenses();
@@ -1134,6 +1172,122 @@ async function delFile(id){
   STATE.files=STATE.files.filter(x=>x.id!==id);
   try{ await fetch(FILE_NODE+"/"+id+".json",{method:"DELETE"}); }catch(e){}
   pushCloud(); render();
+}
+
+/* =====================================================================
+   לוח שנה — מרכז הכל לפי תאריך; לחיצה על יום מראה מה היה בו
+   ===================================================================== */
+const HE_MONTHS=["ינואר","פברואר","מרץ","אפריל","מאי","יוני","יולי","אוגוסט","ספטמבר","אוקטובר","נובמבר","דצמבר"];
+const DOW_HE=["א","ב","ג","ד","ה","ו","ש"];
+function calMonth(){ return CAL_MONTH || todayISO().slice(0,7); }
+function calDate(){ return CAL_DATE || todayISO(); }
+function calSetMonth(){ const y=val("cal-year"), m=val("cal-month"); CAL_MONTH=y+"-"+m; render(); }
+function calShift(n){ const [y,m]=calMonth().split("-").map(Number); const d=new Date(y,m-1+n,1);
+  CAL_MONTH=d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0"); render(); }
+function calToday(){ CAL_MONTH=null; CAL_DATE=null; render(); }
+function calPick(iso){ CAL_DATE=iso; render(); }
+/* מה קרה ביום נתון (לילד הנבחר) */
+function dayActivity(k, iso){
+  return {
+    diary: STATE.diary.filter(e=>e.kid===k&&e.date===iso),
+    expense: STATE.expenses.filter(e=>e.kid===k&&e.date===iso),
+    task: STATE.tasks.filter(t=>t.kid===k&&t.due===iso),
+    file: STATE.files.filter(f=>f.kid===k&&f.date===iso),
+  };
+}
+function viewCalendar(){
+  const k=CUR_KID, ym=calMonth(), [y,m]=ym.split("-").map(Number);
+  const yNow=new Date().getFullYear();
+  const firstDow=new Date(y,m-1,1).getDay();
+  const daysInMonth=new Date(y,m,0).getDate();
+  const today=todayISO(), sel=calDate();
+
+  // בורר חודש/שנה + חיצים
+  let html=`<div class="cal-nav">
+    <button class="arw" onclick="calShift(1)">›</button>
+    <select id="cal-month" onchange="calSetMonth()">${HE_MONTHS.map((nm,i)=>`<option value="${String(i+1).padStart(2,'0')}" ${i+1===m?'selected':''}>${nm}</option>`).join("")}</select>
+    <select id="cal-year" onchange="calSetMonth()">${[yNow-2,yNow-1,yNow,yNow+1].map(yy=>`<option ${yy===y?'selected':''}>${yy}</option>`).join("")}</select>
+    <button class="arw" onclick="calShift(-1)">‹</button>
+  </div>`;
+  html+=`<button class="cal-today" onclick="calToday()">↩︎ חזרה להיום</button>`;
+
+  // כותרות ימים
+  html+=`<div class="cal-grid">`+DOW_HE.map(d=>`<div class="cal-dow">${d}</div>`).join("");
+  // תאים ריקים בתחילת החודש
+  for(let i=0;i<firstDow;i++) html+=`<div class="cal-cell empty"></div>`;
+  // ימי החודש
+  for(let d=1; d<=daysInMonth; d++){
+    const iso=ym+"-"+String(d).padStart(2,"0");
+    const a=dayActivity(k,iso);
+    let dots="";
+    if(a.diary.length) dots+=`<span class="cal-dot" style="background:#3f9d6d"></span>`;
+    if(a.expense.length) dots+=`<span class="cal-dot" style="background:#d9a441"></span>`;
+    if(a.task.length) dots+=`<span class="cal-dot" style="background:#6a8fd8"></span>`;
+    if(a.file.length) dots+=`<span class="cal-dot" style="background:#c05fb0"></span>`;
+    const cls=[(iso===today?"today":""),(iso===sel?"sel":"")].join(" ");
+    html+=`<div class="cal-cell ${cls}" onclick="calPick('${iso}')">
+      <span class="dnum">${d}</span><div class="cal-dots">${dots}</div></div>`;
+  }
+  html+=`</div>`;
+
+  // מקרא
+  html+=`<div class="cal-legend">
+    <span><i style="background:#3f9d6d"></i>יומן</span>
+    <span><i style="background:#d9a441"></i>הוצאה</span>
+    <span><i style="background:#6a8fd8"></i>משימה</span>
+    <span><i style="background:#c05fb0"></i>מסמך</span>
+  </div>`;
+
+  // פירוט היום הנבחר
+  html+=calDayDetail(k, sel);
+  return html;
+}
+function calDayDetail(k, iso){
+  const a=dayActivity(k,iso);
+  const total=a.diary.length+a.expense.length+a.task.length+a.file.length;
+  let html=`<div class="section-title">📌 ${dayLabel(iso)} · ${KIDS[k].name}</div>`;
+  if(!total) return html+`<div class="empty">לא נרשם כלום ביום הזה.</div>`;
+
+  // מסמכים (בדיקות/חיסונים) — הכי רלוונטי ללחוץ ולראות
+  if(a.file.length){
+    html+=`<div class="card ${kidClass(k)}"><div class="tiny" style="font-weight:800;color:#c05fb0;margin-bottom:4px">📁 מסמכים ובדיקות</div>`;
+    html+=a.file.map(f=>`<div class="item"><div class="row spread">
+      <div onclick="openFile('${f.id}')"><h4 style="color:var(--brand-d)">${CAT_ICON[f.category]||"📄"} ${esc(f.title||f.filename)}</h4>
+        <div class="tiny">${esc(f.category)}${f.note?" · "+esc(f.note):""}</div></div>
+      <button onclick="openFile('${f.id}')" class="tiny" style="color:var(--brand);font-weight:700">פתח</button>
+    </div></div>`).join("")+`</div>`;
+  }
+  // יומן
+  if(a.diary.length){
+    const sorted=a.diary.slice().sort((x,z)=>(x.time||"").localeCompare(z.time||""));
+    html+=`<div class="card"><div class="tiny" style="font-weight:800;color:#3f9d6d;margin-bottom:4px">📔 יומן</div>`;
+    html+=sorted.map(e=>{
+      let icon,title,sub="";
+      if(e.type==="meal"){ icon="🍽️"; title=`${e.meal} — ${esc(e.what||"")}`; sub=e.amount?("כמות: "+esc(e.amount)):""; }
+      else if(e.type==="sleep"){ icon="😴"; title=`שינה${e.isNap?" (צהריים)":""} ${e.start}–${e.end}`; sub=`${sleepHours(e).toFixed(1)} שעות${e.quality?" · "+esc(e.quality):""}`; }
+      else { icon=e.mood?e.mood.split(" ")[0]:"😊"; title=e.mood?esc(e.mood):"מצב רוח";
+        const parts=[]; if(e.temp)parts.push("🌡️ "+esc(e.temp)+"°"); if(e.meds)parts.push("💊 "+esc(e.meds));
+        if(e.diaper)parts.push("🧷 "+esc(e.diaper)); if(e.school)parts.push("🏫 "+esc(e.school)); if(e.note)parts.push(esc(e.note));
+        sub=parts.join(" · "); }
+      return `<div class="item"><div class="row" style="align-items:flex-start">
+        <div class="ic" style="width:32px;height:32px;font-size:16px">${icon}</div>
+        <div><h4>${title}</h4>${sub?`<div class="muted">${sub}</div>`:""}<div class="tiny">${e.time||""} · ${esc(e.createdBy)}</div></div>
+      </div></div>`;
+    }).join("")+`</div>`;
+  }
+  // הוצאות
+  if(a.expense.length){
+    html+=`<div class="card"><div class="tiny" style="font-weight:800;color:#a86a1e;margin-bottom:4px">💰 הוצאות</div>`;
+    html+=a.expense.map(e=>`<div class="item"><h4>${nis(e.amount)} · ${esc(e.category)}</h4>
+      <div class="tiny">${esc(e.note||"")}${e.note?" · ":""}שילם/ה ${esc(e.paidBy)}</div></div>`).join("")+`</div>`;
+  }
+  // משימות
+  if(a.task.length){
+    html+=`<div class="card"><div class="tiny" style="font-weight:800;color:#516074;margin-bottom:4px">✅ משימות ליום זה</div>`;
+    html+=a.task.map(t=>`<div class="item"><h4 class="${t.done?'':''}">${t.done?"✔️ ":""}${esc(t.title)}</h4>
+      <div class="tiny">אחראי: ${esc(t.owner)}${t.done?" · בוצע":""}</div></div>`).join("")+`</div>`;
+  }
+  return html;
 }
 
 /* =====================================================================
