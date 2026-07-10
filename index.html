@@ -282,7 +282,7 @@ let editing = false;        // מונע דריסה תוך כדי מילוי טו
 
 function defaultState(){
   return {
-    tasks:[], shopping:[], expenses:[], diary:[], files:[],
+    tasks:[], shopping:[], expenses:[], diary:[], files:[], recipes:[],
     profiles:{ lavi:{birth:""}, ema:{birth:""} },   // תאריכי לידה
     settings:{ splitGal:50 },   // אחוז שגל צריך לשאת; רחל = המשלים
     activity:[],
@@ -411,6 +411,16 @@ function seedIfEmpty(){
   ["עמנואל · 15.06.2026","המוגלובין: 11.8 (תקין)","טסיות: 280 (תקין)","סה\"כ: הכל בטווח התקין ✓","(מסמך דוגמה)"].forEach((line,i)=>ctx.fillText(line,300,120+i*45));
   fetch(FILE_NODE+"/"+fid+".json",{method:"PUT",headers:{"Content-Type":"application/json"},
     body:JSON.stringify({data:c.toDataURL("image/png"),mime:"image/png"})});
+  STATE.recipes=[
+    {id:uid(),title:"דייסת שיבולת שועל ובננה",meal:"בוקר",
+     ingredients:"שיבולת שועל 3 כפות\nמים או חלב אם/תמ״ל 1/2 כוס\nבננה בשלה 1/2",
+     steps:"מבשלים את השיבולת שועל עם הנוזל 3-4 דק׳ עד שמתרכך.\nמועכים בננה ומערבבים פנימה. מגישים פושר.",
+     note:"מתאים מגיל 6 חודשים",createdBy:"רחל",createdAt:Date.now()-4e5},
+    {id:uid(),title:"פירה אבוקדו ותפו״א",meal:"צהריים",
+     ingredients:"תפוח אדמה 1\nאבוקדו 1/4\nמעט שמן זית",
+     steps:"מבשלים תפו״א עד ריכוך, מועכים עם אבוקדו וטיפת שמן זית למרקם חלק.",
+     note:"עשיר בברזל ושומנים טובים",createdBy:"גל",createdAt:Date.now()-3e5},
+  ];
   logActivity("נפתחה המערכת 🎉","🎉");
   pushCloud();
 }
@@ -425,6 +435,7 @@ const SECTIONS=[
   {id:"tasks", label:"✅ משימות"},
   {id:"shopping", label:"🛒 קניות"},
   {id:"expenses", label:"💰 הוצאות"},
+  {id:"recipes", label:"🍳 מתכונים"},
   {id:"files", label:"📁 תיק בריאות"},
 ];
 document.querySelectorAll(".kid").forEach(b=>{
@@ -447,6 +458,7 @@ function render(){
   else if(CUR_SEC==="shopping") m.innerHTML=viewShopping();
   else if(CUR_SEC==="expenses") m.innerHTML=viewExpenses();
   else if(CUR_SEC==="files") m.innerHTML=viewFiles();
+  else if(CUR_SEC==="recipes") m.innerHTML=viewRecipes();
   bindMain();
 }
 const kidClass = k => k==="lavi"?"k-lavi":"k-ema";
@@ -460,12 +472,16 @@ function viewHome(){
   const openTasks=STATE.tasks.filter(t=>t.kid===k&&!t.done).length;
   const needBuy=STATE.shopping.filter(s=>s.kid===k&&!s.bought).length;
   const monthExp=STATE.expenses.filter(e=>e.kid===k&&sameMonth(e.date)).reduce((a,e)=>a+ +e.amount,0);
+  const a=ageInfo(k);
+  const ageStat = a
+    ? `<div class="stat" onclick="openProfile('${k}')" style="cursor:pointer"><div class="n" style="font-size:16px;padding:3px 0">${KIDS[k].emoji} ${a.label}</div><div class="l">גיל ${KIDS[k].name}</div></div>`
+    : `<div class="stat" onclick="openProfile('${k}')" style="cursor:pointer"><div class="n" style="font-size:16px;padding:3px 0">➕ הזינו</div><div class="l">תאריך לידה ${KIDS[k].name}</div></div>`;
   let html=`
     <div class="stat-grid">
       <div class="stat"><div class="n" style="color:var(--brand)">${openTasks}</div><div class="l">משימות פתוחות</div></div>
       <div class="stat"><div class="n" style="color:var(--gold)">${needBuy}</div><div class="l">חוסרים לקנות</div></div>
       <div class="stat"><div class="n">${nis(monthExp)}</div><div class="l">הוצאות החודש</div></div>
-      <div class="stat"><div class="n">${KIDS[k].emoji}</div><div class="l">מסך של ${KIDS[k].name}</div></div>
+      ${ageStat}
     </div>`;
   html+=`<div class="section-title">📣 מה חדש (שני הילדים)</div><div class="card">`;
   if(!STATE.activity.length) html+=`<div class="empty">אין פעילות עדיין</div>`;
@@ -1485,6 +1501,57 @@ function calDayDetail(k, iso){
   }
   return html;
 }
+
+/* =====================================================================
+   מתכונים — ספר בישול משותף לשני ההורים (בעיקר לעמנואל)
+   ===================================================================== */
+const RECIPE_MEALS = ["בוקר","צהריים","ערב","חטיף"];
+const RECIPE_ICON = {"בוקר":"🌅","צהריים":"☀️","ערב":"🌙","חטיף":"🍎"};
+function viewRecipes(){
+  const list=STATE.recipes.slice().sort((a,b)=>b.createdAt-a.createdAt);
+  let html=`<button class="add-btn" onclick="openRecipeForm()">＋ הוספת מתכון</button>`;
+  html+=`<div class="tiny" style="text-align:center;margin:-6px 0 12px;color:var(--muted)">ספר מתכונים משותף — כל מה שעובד טוב לילדים, במקום אחד 🍽️</div>`;
+  if(!list.length) return html+`<div class="empty">אין מתכונים עדיין.<br>מי שמכיר ארוחה טובה — מוזמן להוסיף! 🙂</div>`;
+  RECIPE_MEALS.forEach(meal=>{
+    const items=list.filter(r=>r.meal===meal); if(!items.length) return;
+    html+=`<div class="section-title">${RECIPE_ICON[meal]} ${meal} (${items.length})</div>`;
+    html+=items.map(r=>`<div class="card" onclick="editRecipe('${r.id}')" style="cursor:pointer">
+      <div class="row spread">
+        <h4 style="font-size:16px;color:var(--brand-d)">${esc(r.title)}</h4>
+        <span class="tiny">✏️</span>
+      </div>
+      ${r.ingredients?`<div style="margin-top:8px"><b class="tiny" style="color:var(--brand-d)">מרכיבים:</b><div style="font-size:14px;white-space:pre-line">${esc(r.ingredients)}</div></div>`:""}
+      ${r.steps?`<div style="margin-top:8px"><b class="tiny" style="color:var(--brand-d)">הכנה:</b><div style="font-size:14px;white-space:pre-line">${esc(r.steps)}</div></div>`:""}
+      ${r.note?`<div class="tiny" style="margin-top:8px;color:var(--warn)">💡 ${esc(r.note)}</div>`:""}
+      <div class="tiny" style="margin-top:8px">מאת ${esc(r.createdBy)}</div>
+    </div>`).join("");
+  });
+  return html;
+}
+function openRecipeForm(e){
+  editing=true; EDIT_ID = e?e.id:null;
+  sheet(`<h3>🍳 ${e?"עריכת מתכון":"מתכון חדש"}</h3>
+    <div class="field"><label>שם המתכון</label><input id="f-rtitle" value="${e?esc(e.title):""}" placeholder="למשל: פנקייק בננה ללא סוכר"></div>
+    <div class="field"><label>לאיזו ארוחה</label>
+      ${segHTML("f-rmeal",RECIPE_MEALS.map(m=>[m,RECIPE_ICON[m]+" "+m]), e?e.meal:"בוקר")}</div>
+    <div class="field"><label>מרכיבים (שורה לכל מרכיב)</label><textarea id="f-ring" style="min-height:90px" placeholder="בננה בשלה 1&#10;ביצה 1&#10;קמח שיבולת שועל 3 כפות">${e?esc(e.ingredients||""):""}</textarea></div>
+    <div class="field"><label>אופן ההכנה</label><textarea id="f-rsteps" style="min-height:90px" placeholder="מועכים את הבננה, מוסיפים ביצה וקמח, מטגנים במחבת…">${e?esc(e.steps||""):""}</textarea></div>
+    <div class="field"><label>טיפ / מתאים מגיל (רשות)</label><input id="f-rnote" value="${e?esc(e.note||""):""}" placeholder="מתאים מגיל 8 חודשים / אפשר להקפיא"></div>
+    <button class="save" onclick="saveRecipe()">שמירה</button>
+    ${e?`<div class="cancel" style="color:var(--danger);font-weight:800" onclick="delRecipe('${e.id}');closeSheet()">🗑 מחיקת המתכון</div>`:""}
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+  segify();
+}
+function saveRecipe(){
+  const title=val("f-rtitle").trim(); if(!title){ alert("צריך שם למתכון"); return; }
+  const data={title,meal:segVal("f-rmeal"),ingredients:val("f-ring").trim(),steps:val("f-rsteps").trim(),note:val("f-rnote").trim()};
+  if(EDIT_ID){ Object.assign(STATE.recipes.find(x=>x.id===EDIT_ID),data); }
+  else STATE.recipes.push(Object.assign({id:uid(),createdBy:ME,createdAt:Date.now()},data));
+  logActivity(`הוסיף/ה מתכון: ${title}`,"🍳");
+  closeSheet(); pushCloud(); render();
+}
+function editRecipe(id){ const r=STATE.recipes.find(x=>x.id===id); if(r) openRecipeForm(r); }
+function delRecipe(id){ if(!confirm("למחוק מתכון?"))return; STATE.recipes=STATE.recipes.filter(x=>x.id!==id); pushCloud(); render(); }
 
 /* =====================================================================
    מודל / טופס
