@@ -1569,9 +1569,12 @@ function calDayDetail(k, iso){
   if(a.file.length){
     html+=`<div class="card ${kidClass(k)}"><div class="tiny" style="font-weight:800;color:#c05fb0;margin-bottom:4px">📁 מסמכים ובדיקות</div>`;
     html+=a.file.map(f=>`<div class="item"><div class="row spread">
-      <div onclick="openFile('${f.id}')"><h4 style="color:var(--brand-d)">${CAT_ICON[f.category]||"📄"} ${esc(f.title||f.filename)}</h4>
+      <div onclick="openFile('${f.id}')" style="cursor:pointer;flex:1"><h4 style="color:var(--brand-d)">${CAT_ICON[f.category]||"📄"} ${esc(f.title||f.filename)}</h4>
         <div class="tiny">${esc(f.category)}${f.note?" · "+esc(f.note):""}</div></div>
-      <button onclick="openFile('${f.id}')" class="tiny" style="color:var(--brand);font-weight:700">פתח</button>
+      <div class="row" style="gap:10px">
+        <button onclick="openFile('${f.id}')" class="tiny" style="color:var(--brand);font-weight:700">פתח</button>
+        <button onclick="delFile('${f.id}')" class="tiny" style="color:var(--danger)">מחק</button>
+      </div>
     </div></div>`).join("")+`</div>`;
   }
   // יומן
@@ -1586,17 +1589,23 @@ function calDayDetail(k, iso){
       </div></div>`;
     }).join("")+`</div>`;
   }
-  // הוצאות
+  // הוצאות — לחיצה לעריכה, כפתור מחיקה
   if(a.expense.length){
     html+=`<div class="card"><div class="tiny" style="font-weight:800;color:#a86a1e;margin-bottom:4px">💰 הוצאות</div>`;
-    html+=a.expense.map(e=>`<div class="item"><h4>${nis(e.amount)} · ${esc(e.category)}</h4>
-      <div class="tiny">${esc(e.note||"")}${e.note?" · ":""}שילם/ה ${esc(e.paidBy)}</div></div>`).join("")+`</div>`;
+    html+=a.expense.map(e=>`<div class="item"><div class="row spread">
+      <div onclick="editExp('${e.id}')" style="cursor:pointer;flex:1"><h4>${nis(e.amount)} · ${esc(e.category)}</h4>
+        <div class="tiny">${esc(e.note||"")}${e.note?" · ":""}שילם/ה ${esc(e.paidBy)} · ✏️ ערוך</div></div>
+      <button onclick="delExp('${e.id}')" class="tiny" style="color:var(--danger)">מחק</button>
+    </div></div>`).join("")+`</div>`;
   }
-  // משימות
+  // משימות — לחיצה לעריכה, כפתור מחיקה
   if(a.task.length){
     html+=`<div class="card"><div class="tiny" style="font-weight:800;color:#516074;margin-bottom:4px">✅ משימות ליום זה</div>`;
-    html+=a.task.map(t=>`<div class="item"><h4 class="${t.done?'':''}">${t.done?"✔️ ":""}${esc(t.title)}</h4>
-      <div class="tiny">אחראי: ${esc(t.owner)}${t.done?" · בוצע":""}</div></div>`).join("")+`</div>`;
+    html+=a.task.map(t=>`<div class="item"><div class="row spread">
+      <div onclick="editTask('${t.id}')" style="cursor:pointer;flex:1"><h4>${t.done?"✔️ ":""}${esc(t.title)}</h4>
+        <div class="tiny">אחראי: ${esc(t.owner)}${t.done?" · בוצע":""} · ✏️ ערוך</div></div>
+      <button onclick="delTask('${t.id}')" class="tiny" style="color:var(--danger)">מחק</button>
+    </div></div>`).join("")+`</div>`;
   }
   return html;
 }
