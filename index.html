@@ -209,6 +209,15 @@ main{padding:8px 16px}
   display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(60,95,81,.45);transition:.12s}
 #fab:active{transform:scale(.9)}
 @media(min-width:600px){#fab{left:calc(50% - 280px + 16px)}}
+/* ---------- Customize (dashboard editor) ---------- */
+#gearBtn{font-size:17px;padding:2px 4px}
+.pref-row{display:flex;align-items:center;gap:9px;padding:9px 2px;border-bottom:1px solid var(--line)}
+.pref-eye{width:40px;height:40px;border-radius:11px;border:1.5px solid var(--line);font-size:17px;background:#faf8f3}
+.pref-eye.on{background:#eef4f1;border-color:var(--brand)}
+.pref-label{flex:1;font-weight:700;font-size:15px}
+.pref-label.off{color:var(--muted);text-decoration:line-through}
+.pref-arrows button{width:36px;height:36px;border:1.5px solid var(--line);border-radius:10px;font-size:14px;margin-inline-start:5px;background:#fff}
+.pref-arrows button:disabled{opacity:.28}
 </style>
 </head>
 <body>
@@ -232,7 +241,7 @@ main{padding:8px 16px}
   <header>
     <div class="hrow">
       <div class="htitle"><span class="dot" id="syncDot"></span>הורות יחד</div>
-      <div class="me"><span id="meName"></span><button id="logout">יציאה</button></div>
+      <div class="me"><span id="meName"></span><button id="gearBtn" onclick="openCustomize()" title="התאמה אישית">⚙️</button><button id="logout">יציאה</button></div>
     </div>
     <div class="kids">
       <button class="kid sel" data-k="lavi"><span class="av" style="background:var(--lavi)">👦</span>לביא</button>
@@ -356,6 +365,7 @@ document.querySelectorAll(".who button").forEach(b=>{
 document.getElementById("logout").onclick=()=>{ localStorage.removeItem("horut_me"); location.reload(); };
 
 async function startApp(){
+  loadPrefs();
   document.getElementById("login").style.display="none";
   document.getElementById("app").style.display="block";
   document.getElementById("meName").textContent="מחובר/ת: "+ME;
@@ -445,9 +455,13 @@ document.querySelectorAll(".kid").forEach(b=>{
 });
 
 function render(){
-  // nav
+  // nav (לפי ההעדפות האישיות — סדר + הצגה/הסתרה)
+  if(!PREFS) loadPrefs();
+  let navSecs=PREFS.nav.filter(p=>p.on).map(p=>SECTIONS.find(s=>s.id===p.id)).filter(Boolean);
+  if(!navSecs.length) navSecs=SECTIONS.slice();
+  if(!navSecs.find(s=>s.id===CUR_SEC)) CUR_SEC=navSecs[0].id;
   const nav=document.getElementById("nav");
-  nav.innerHTML=SECTIONS.map(s=>`<button data-s="${s.id}" class="${s.id===CUR_SEC?'sel':''}">${s.label}</button>`).join("");
+  nav.innerHTML=navSecs.map(s=>`<button data-s="${s.id}" class="${s.id===CUR_SEC?'sel':''}">${s.label}</button>`).join("");
   nav.querySelectorAll("button").forEach(b=> b.onclick=()=>{ CUR_SEC=b.dataset.s; render(); });
   // main
   const m=document.getElementById("main");
@@ -463,34 +477,112 @@ function render(){
 }
 const kidClass = k => k==="lavi"?"k-lavi":"k-ema";
 const kidBadge = k => `<span class="badge ${k}">${KIDS[k].emoji} ${KIDS[k].name}</span>`;
+function go(sec){ CUR_SEC=sec; render(); window.scrollTo(0,0); }
+
+/* =====================================================================
+   התאמה אישית — מה מופיע, באיזה סדר (נשמר במכשיר, פר-הורה)
+   ===================================================================== */
+let PREFS = null;
+const HOME_LABELS={tasks:'משימות פתוחות',shopping:'חוסרים לקנות',expenses:'הוצאות החודש',
+  age:'גיל הילד',sleep:'שינה היום',meals:'ארוחות היום',settle:'מאזן התחשבנות',
+  opensleep:'התראת שינה פתוחה',feed:'פיד "מה חדש"'};
+function defaultPrefs(){
+  return {
+    nav: SECTIONS.map(s=>({id:s.id,on:true})),
+    home: [
+      {id:'tasks',on:true},{id:'shopping',on:true},{id:'expenses',on:true},{id:'age',on:true},
+      {id:'opensleep',on:true},{id:'sleep',on:false},{id:'meals',on:false},{id:'settle',on:false},
+      {id:'feed',on:true}
+    ]
+  };
+}
+function mergeList(def,saved){
+  const defIds=def.map(x=>x.id);
+  const valid=(saved||[]).filter(x=>defIds.includes(x.id));
+  const seen=valid.map(x=>x.id);
+  return valid.concat(def.filter(x=>!seen.includes(x.id)));
+}
+function loadPrefs(){
+  let s=null; try{ s=JSON.parse(localStorage.getItem("horut_prefs")); }catch(e){}
+  const d=defaultPrefs();
+  PREFS = s ? {nav:mergeList(d.nav,s.nav), home:mergeList(d.home,s.home)} : d;
+}
+function savePrefs(){ localStorage.setItem("horut_prefs", JSON.stringify(PREFS)); }
+function prefsToggle(kind,id){ const p=PREFS[kind].find(x=>x.id===id); if(p)p.on=!p.on; savePrefs(); render(); openCustomize(); }
+function prefsMove(kind,id,dir){
+  const arr=PREFS[kind]; const i=arr.findIndex(x=>x.id===id); const j=i+dir;
+  if(j<0||j>=arr.length) return;
+  const t=arr[i]; arr[i]=arr[j]; arr[j]=t;
+  savePrefs(); render(); openCustomize();
+}
+function prefsReset(){ if(!confirm("לאפס את הסידור לברירת המחדל?"))return; PREFS=defaultPrefs(); savePrefs(); render(); openCustomize(); }
+function prefRow(kind,p,i,len,label){
+  return `<div class="pref-row">
+    <button class="pref-eye ${p.on?'on':''}" onclick="prefsToggle('${kind}','${p.id}')" title="${p.on?'מוצג':'מוסתר'}">${p.on?'👁️':'🚫'}</button>
+    <span class="pref-label ${p.on?'':'off'}">${label}</span>
+    <span class="pref-arrows">
+      <button onclick="prefsMove('${kind}','${p.id}',-1)" ${i===0?'disabled':''}>▲</button>
+      <button onclick="prefsMove('${kind}','${p.id}',1)" ${i===len-1?'disabled':''}>▼</button>
+    </span>
+  </div>`;
+}
+function openCustomize(){
+  editing=true;
+  if(!PREFS) loadPrefs();
+  const homeRows=PREFS.home.map((p,i)=>prefRow('home',p,i,PREFS.home.length, HOME_LABELS[p.id]||p.id)).join("");
+  const navRows=PREFS.nav.map((p,i)=>prefRow('nav',p,i,PREFS.nav.length, (SECTIONS.find(s=>s.id===p.id)||{}).label||p.id)).join("");
+  sheet(`<h3>⚙️ התאמה אישית</h3>
+    <p class="muted" style="margin-top:-6px">👁️ מוצג · 🚫 מוסתר · ▲▼ לשינוי הסדר. נשמר במכשיר שלך בלבד — גל ורחל יכולים לסדר כל אחד אחרת.</p>
+    <div class="section-title">🏠 דף הבית — מה מופיע ובאיזה סדר</div>
+    ${homeRows}
+    <div class="section-title" style="margin-top:16px">📱 הלשוניות — מה מופיע ובאיזה סדר</div>
+    ${navRows}
+    <button class="export-btn" onclick="prefsReset()" style="margin-top:14px">↺ איפוס לברירת מחדל</button>
+    <div class="cancel" onclick="closeSheet()">סגירה</div>`);
+}
 
 /* =====================================================================
    בית — פיד "מה חדש" + סיכום מהיר
    ===================================================================== */
 function viewHome(){
   const k=CUR_KID;
+  if(!PREFS) loadPrefs();
   const openTasks=STATE.tasks.filter(t=>t.kid===k&&!t.done).length;
   const needBuy=STATE.shopping.filter(s=>s.kid===k&&!s.bought).length;
   const monthExp=STATE.expenses.filter(e=>e.kid===k&&sameMonth(e.date)).reduce((a,e)=>a+ +e.amount,0);
   const a=ageInfo(k);
+  const today=todayISO();
+  const daySleep=STATE.diary.filter(e=>e.kid===k&&e.date===today&&e.type==="sleep").reduce((x,e)=>x+sleepHours(e),0);
+  const dayMeals=STATE.diary.filter(e=>e.kid===k&&e.date===today&&e.type==="meal"&&e.outcome!=="tried").length;
+  const settle=computeSettle();
+  const openSleep=STATE.diary.filter(e=>e.kid===k&&e.type==="sleep"&&!e.end&&e.outcome!=="tried").sort((x,y)=>y.createdAt-x.createdAt)[0];
   const ageStat = a
     ? `<div class="stat" onclick="openProfile('${k}')" style="cursor:pointer"><div class="n" style="font-size:16px;padding:3px 0">${KIDS[k].emoji} ${a.label}</div><div class="l">גיל ${KIDS[k].name}</div></div>`
-    : `<div class="stat" onclick="openProfile('${k}')" style="cursor:pointer"><div class="n" style="font-size:16px;padding:3px 0">➕ הזינו</div><div class="l">תאריך לידה ${KIDS[k].name}</div></div>`;
-  let html=`
-    <div class="stat-grid">
-      <div class="stat"><div class="n" style="color:var(--brand)">${openTasks}</div><div class="l">משימות פתוחות</div></div>
-      <div class="stat"><div class="n" style="color:var(--gold)">${needBuy}</div><div class="l">חוסרים לקנות</div></div>
-      <div class="stat"><div class="n">${nis(monthExp)}</div><div class="l">הוצאות החודש</div></div>
-      ${ageStat}
-    </div>`;
-  html+=`<div class="section-title">📣 מה חדש (שני הילדים)</div><div class="card">`;
-  if(!STATE.activity.length) html+=`<div class="empty">אין פעילות עדיין</div>`;
-  else html+=STATE.activity.slice(0,20).map(a=>`
-    <div class="feed-item">
-      <div class="ic">${a.emoji}</div>
-      <div><div>${esc(a.text)}</div><div class="tiny">${esc(a.who)} · ${timeAgo(a.ts)}</div></div>
-    </div>`).join("");
-  html+=`</div>`;
+    : `<div class="stat" onclick="openProfile('${k}')" style="cursor:pointer"><div class="n" style="font-size:16px;padding:3px 0">➕ הזינו</div><div class="l">תאריך לידה</div></div>`;
+  const feed = `<div class="section-title">📣 מה חדש (שני הילדים)</div><div class="card">`+
+    (STATE.activity.length ? STATE.activity.slice(0,20).map(x=>`
+      <div class="feed-item"><div class="ic">${x.emoji}</div>
+        <div><div>${esc(x.text)}</div><div class="tiny">${esc(x.who)} · ${timeAgo(x.ts)}</div></div></div>`).join("")
+      : `<div class="empty">אין פעילות עדיין</div>`)+`</div>`;
+
+  const W={
+    tasks:{t:'stat',h:`<div class="stat" onclick="go('tasks')" style="cursor:pointer"><div class="n" style="color:var(--brand)">${openTasks}</div><div class="l">משימות פתוחות</div></div>`},
+    shopping:{t:'stat',h:`<div class="stat" onclick="go('shopping')" style="cursor:pointer"><div class="n" style="color:var(--gold)">${needBuy}</div><div class="l">חוסרים לקנות</div></div>`},
+    expenses:{t:'stat',h:`<div class="stat" onclick="go('expenses')" style="cursor:pointer"><div class="n">${nis(monthExp)}</div><div class="l">הוצאות החודש</div></div>`},
+    age:{t:'stat',h:ageStat},
+    sleep:{t:'stat',h:`<div class="stat" onclick="go('diary')" style="cursor:pointer"><div class="n" style="color:var(--brand)">${daySleep?daySleep.toFixed(1):"0"}<span style="font-size:13px"> ש׳</span></div><div class="l">שינה היום</div></div>`},
+    meals:{t:'stat',h:`<div class="stat" onclick="go('diary')" style="cursor:pointer"><div class="n" style="color:var(--gold)">${dayMeals}</div><div class="l">ארוחות היום</div></div>`},
+    settle:{t:'block',h:`<div class="settle" onclick="go('expenses')" style="cursor:pointer"><small>מאזן התחשבנות</small><div class="big">${settle.text}</div></div>`},
+    opensleep:{t:'block',h: openSleep?`<div class="wake-banner"><div>😴 <b>${KIDS[k].name}</b> נרדמה ב-${openSleep.start}${openSleep.date!==today?" ("+dayLabel(openSleep.date)+")":""} — עדיין ישנה</div><button class="save" style="margin-top:8px" onclick="wakeSleep('${openSleep.id}')">☀️ סמן יקיצה עכשיו (${nowHHMM()})</button></div>`:""},
+    feed:{t:'block',h:feed}
+  };
+
+  let html=""; let buf=[];
+  const flush=()=>{ if(buf.length){ html+=`<div class="stat-grid">${buf.join("")}</div>`; buf=[]; } };
+  PREFS.home.filter(p=>p.on).forEach(p=>{ const w=W[p.id]; if(!w||!w.h) return;
+    if(w.t==="stat") buf.push(w.h); else { flush(); html+=w.h; } });
+  flush();
+  html+=`<button class="export-btn" onclick="openCustomize()" style="margin-top:8px">⚙️ עריכת דף הבית והלשוניות</button>`;
   return html;
 }
 function sameMonth(iso){ if(!iso) return false; const d=new Date(iso); const n=new Date();
