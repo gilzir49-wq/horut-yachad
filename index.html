@@ -339,7 +339,9 @@ async function syncPoll(){
    ===================================================================== */
 const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
 const nis = n => "₪"+ (Math.round(n*100)/100).toLocaleString("he-IL");
-function todayISO(){ return new Date().toISOString().slice(0,10); }
+// תאריך מקומי (לא UTC) — קריטי בישראל UTC+2/+3 כדי שהחצים והתאריכים יהיו מדויקים
+function isoLocal(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function todayISO(){ return isoLocal(new Date()); }
 function fmtDate(iso){ if(!iso) return ""; const d=new Date(iso+ (iso.length<=10?"T00:00":""));
   return d.toLocaleDateString("he-IL",{day:"numeric",month:"short"}); }
 function timeAgo(ts){
@@ -379,8 +381,8 @@ async function startApp(){
 /* דוגמת נתונים ראשונית (רק אם הענן ריק) */
 function seedIfEmpty(){
   // תאריכי לידה לדוגמה — עדכנו בפרופיל של כל ילד
-  const d1=new Date(Date.now()-8*30*864e5).toISOString().slice(0,10);   // עמנואל ~8 חודשים
-  const d2=new Date(Date.now()-6*365*864e5).toISOString().slice(0,10);  // לביא ~6 שנים
+  const d1=isoLocal(new Date(Date.now()-8*30*864e5));   // עמנואל ~8 חודשים
+  const d2=isoLocal(new Date(Date.now()-6*365*864e5));  // לביא ~6 שנים
   STATE.profiles={ lavi:{birth:d2}, ema:{birth:d1} };
   STATE.tasks=[
     {id:uid(),kid:"lavi",title:"לתאם חיסון שנתי",desc:"טיפת חלב",owner:"שנינו",due:todayISO(),
@@ -401,7 +403,7 @@ function seedIfEmpty(){
     {id:uid(),kid:"lavi",date:todayISO(),category:"חוגים",amount:320,paidBy:"גל",note:"חוג כדורגל",createdBy:"גל",createdAt:Date.now()-7e5},
     {id:uid(),kid:"ema",date:june,category:"בריאות",amount:250,paidBy:"רחל",note:"בדיקת דם - ספירה מלאה",createdBy:"רחל",createdAt:Date.now()-25*864e5},
   ];
-  const t=todayISO(), y=new Date(Date.now()-864e5).toISOString().slice(0,10);
+  const t=todayISO(), y=isoLocal(new Date(Date.now()-864e5));
   STATE.diary=[
     {id:uid(),kid:"ema",date:t,type:"meal",meal:"בוקר",what:"דייסת אורז",amount:"חצי מנה",time:"08:15",createdBy:"רחל",createdAt:Date.now()},
     {id:uid(),kid:"ema",date:t,type:"sleep",start:"12:30",end:"14:00",isNap:true,quality:"טובה",time:"12:30",createdBy:"רחל",createdAt:Date.now()},
@@ -562,8 +564,10 @@ function viewHome(){
   const feed = `<div class="section-title">📣 מה חדש (שני הילדים)</div><div class="card">`+
     (STATE.activity.length ? STATE.activity.slice(0,20).map(x=>`
       <div class="feed-item"><div class="ic">${x.emoji}</div>
-        <div><div>${esc(x.text)}</div><div class="tiny">${esc(x.who)} · ${timeAgo(x.ts)}</div></div></div>`).join("")
-      : `<div class="empty">אין פעילות עדיין</div>`)+`</div>`;
+        <div style="flex:1"><div>${esc(x.text)}</div><div class="tiny">${esc(x.who)} · ${timeAgo(x.ts)}</div></div>
+        <button onclick="delActivity('${x.id}')" class="tiny" style="color:var(--danger);padding:4px 8px" title="הסרה מהפיד">✕</button></div>`).join("")
+      : `<div class="empty">אין פעילות עדיין</div>`)+`</div>`+
+    (STATE.activity.length ? `<button class="export-btn" onclick="clearFeed()" style="margin-bottom:12px">🧹 ניקוי הפיד</button>` : "");
 
   const W={
     tasks:{t:'stat',h:`<div class="stat" onclick="go('tasks')" style="cursor:pointer"><div class="n" style="color:var(--brand)">${openTasks}</div><div class="l">משימות פתוחות</div></div>`},
@@ -587,6 +591,8 @@ function viewHome(){
 }
 function sameMonth(iso){ if(!iso) return false; const d=new Date(iso); const n=new Date();
   return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear(); }
+function delActivity(id){ STATE.activity=STATE.activity.filter(a=>a.id!==id); pushCloud(); render(); }
+function clearFeed(){ if(!confirm("לנקות את כל הפיד? (הרישומים עצמם נשמרים)"))return; STATE.activity=[]; pushCloud(); render(); }
 
 /* =====================================================================
    משימות
@@ -950,7 +956,8 @@ const MOODS=[["😊","שמח/ה"],["😐","רגיל"],["😢","בכיין/ית"]
 function curDiaryDate(){ return CUR_DIARY_DATE || todayISO(); }
 function shiftDiary(days){
   const d=new Date(curDiaryDate()+"T00:00"); d.setDate(d.getDate()+days);
-  const iso=d.toISOString().slice(0,10);
+  const iso=isoLocal(d);
+  if(iso>todayISO()) return;               // אי אפשר לעבור לעתיד
   CUR_DIARY_DATE = (iso===todayISO()) ? null : iso;
   render();
 }
@@ -958,7 +965,7 @@ function dayLabel(iso){
   const d=new Date(iso+"T00:00"), t=todayISO();
   const yest=new Date(); yest.setDate(yest.getDate()-1);
   if(iso===t) return "היום";
-  if(iso===yest.toISOString().slice(0,10)) return "אתמול";
+  if(iso===isoLocal(yest)) return "אתמול";
   return d.toLocaleDateString("he-IL",{weekday:"long",day:"numeric",month:"long"});
 }
 function sleepHours(e){
@@ -1080,7 +1087,7 @@ function viewDiary(){
 }
 function weeklyTrends(k){
   const days=[]; const base=new Date(curDiaryDate()+"T00:00");
-  for(let i=6;i>=0;i--){ const d=new Date(base); d.setDate(d.getDate()-i); days.push(d.toISOString().slice(0,10)); }
+  for(let i=6;i>=0;i--){ const d=new Date(base); d.setDate(d.getDate()-i); days.push(isoLocal(d)); }
   const sleepBy={}, mealsBy={};
   days.forEach(dt=>{ const es=STATE.diary.filter(e=>e.kid===k&&e.date===dt);
     sleepBy[dt]=es.filter(e=>e.type==="sleep").reduce((a,e)=>a+sleepHours(e),0);
@@ -1105,7 +1112,7 @@ function curMonth(){ return CUR_MONTH || todayISO().slice(0,7); }   // YYYY-MM
 function shiftMonth(n){
   const [y,m]=curMonth().split("-").map(Number);
   const d=new Date(y, m-1+n, 1);
-  const iso=d.toISOString().slice(0,7);
+  const iso=isoLocal(d).slice(0,7);
   CUR_MONTH = (iso===todayISO().slice(0,7)) ? null : iso;
   render();
 }
@@ -1129,7 +1136,7 @@ function viewDiaryMonth(k){
   const ym=curMonth(), st=monthStats(k,ym);
   // חודש קודם להשוואה
   const [y,m]=ym.split("-").map(Number);
-  const prevYm=new Date(y,m-2,1).toISOString().slice(0,7);
+  const prevYm=isoLocal(new Date(y,m-2,1)).slice(0,7);
   const prev=monthStats(k,prevYm);
   const delta=(st.avgSleep&&prev.avgSleep)? st.avgSleep-prev.avgSleep : null;
   let deltaTxt="";
