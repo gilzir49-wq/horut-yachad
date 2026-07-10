@@ -84,10 +84,10 @@ header{
 
 /* ---------- Section nav ---------- */
 nav.sections{
-  display:flex; gap:6px; padding:12px 16px 4px; overflow-x:auto; -webkit-overflow-scrolling:touch;
+  display:flex; flex-wrap:wrap; gap:7px; padding:12px 16px 4px;
 }
 nav.sections button{
-  white-space:nowrap; padding:8px 14px; border-radius:20px; background:#fff;
+  white-space:nowrap; padding:10px 15px; border-radius:20px; background:#fff;
   border:1px solid var(--line); font-weight:700; font-size:14px; color:var(--muted);
 }
 nav.sections button.sel{background:var(--brand); color:#fff; border-color:var(--brand)}
@@ -203,6 +203,12 @@ main{padding:8px 16px}
 .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%) translateY(10px);background:var(--brand-d);color:#fff;padding:11px 20px;border-radius:22px;font-weight:800;z-index:90;box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;pointer-events:none;transition:.22s;max-width:90%;text-align:center}
 .toast.on{opacity:1;transform:translateX(-50%) translateY(0)}
 .wake-banner{background:#eef4f1;border:1.5px solid var(--brand);border-radius:16px;padding:14px;margin-bottom:12px}
+/* ---------- Floating quick-add button (FAB) ---------- */
+#fab{position:fixed;bottom:22px;left:16px;width:62px;height:62px;border-radius:50%;
+  background:var(--brand);color:#fff;font-size:34px;line-height:1;z-index:55;
+  display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(60,95,81,.45);transition:.12s}
+#fab:active{transform:scale(.9)}
+@media(min-width:600px){#fab{left:calc(50% - 280px + 16px)}}
 </style>
 </head>
 <body>
@@ -236,6 +242,7 @@ main{padding:8px 16px}
 
   <nav class="sections" id="nav"></nav>
   <main id="main"></main>
+  <button id="fab" onclick="openQuickPicker()" title="תיעוד מהיר">＋</button>
 </div>
 
 <!-- ============ MODAL ============ -->
@@ -487,8 +494,8 @@ function viewTasks(){
       <div class="row spread">
         <div class="row" style="align-items:flex-start">
           <div class="chk ${t.done?'on':''}" onclick="toggleTask('${t.id}')">${t.done?'✓':''}</div>
-          <div class="item ${t.done?'checked':''}" style="border:none;padding:0">
-            <h4>${esc(t.title)}</h4>
+          <div class="item ${t.done?'checked':''}" style="border:none;padding:0;cursor:pointer" onclick="editTask('${t.id}')">
+            <h4>${esc(t.title)} <span class="tiny">✏️</span></h4>
             ${t.desc?`<div class="muted">${esc(t.desc)}</div>`:""}
             <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
               <span class="pill ${pr[0]}">${pr[1]}</span>
@@ -511,32 +518,30 @@ function viewTasks(){
   }).join("");
   return html;
 }
-function openTaskForm(){
-  editing=true;
-  sheet(`<h3>משימה חדשה · ${KIDS[CUR_KID].name}</h3>
-    <div class="field"><label>כותרת</label><input id="f-title" placeholder="מה צריך לעשות?"></div>
-    <div class="field"><label>תיאור (רשות)</label><textarea id="f-desc"></textarea></div>
+function openTaskForm(t){
+  editing=true; EDIT_ID = t?t.id:null;
+  sheet(`<h3>${t?"עריכת משימה":"משימה חדשה"} · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>כותרת</label><input id="f-title" value="${t?esc(t.title):""}" placeholder="מה צריך לעשות?"></div>
+    <div class="field"><label>תיאור (רשות)</label><textarea id="f-desc">${t?esc(t.desc||""):""}</textarea></div>
     <div class="field"><label>אחראי</label>
-      <div class="seg" id="f-owner">
-        <button data-v="גל" class="on">גל</button><button data-v="רחל">רחל</button><button data-v="שנינו">שנינו</button>
-      </div></div>
+      ${segHTML("f-owner",[["גל","גל"],["רחל","רחל"],["שנינו","שנינו"]], t?t.owner:"גל")}</div>
     <div class="field"><label>עדיפות</label>
-      <div class="seg" id="f-pri">
-        <button data-v="high">דחוף</button><button data-v="mid" class="on">רגיל</button><button data-v="low">נמוך</button>
-      </div></div>
-    <div class="field"><label>דדליין (רשות)</label><input type="date" id="f-due"></div>
+      ${segHTML("f-pri",[["high","דחוף"],["mid","רגיל"],["low","נמוך"]], t?t.priority:"mid")}</div>
+    <div class="field"><label>דדליין (רשות)</label><input type="date" id="f-due" value="${t?(t.due||""):""}"></div>
     <button class="save" onclick="saveTask()">שמירה</button>
+    ${t?`<div class="cancel" style="color:var(--danger);font-weight:800" onclick="delTask('${t.id}');closeSheet()">🗑 מחיקת המשימה</div>`:""}
     <div class="cancel" onclick="closeSheet()">ביטול</div>`);
   segify();
 }
 function saveTask(){
   const title=val("f-title").trim(); if(!title){ alert("צריך כותרת"); return; }
-  STATE.tasks.push({id:uid(),kid:CUR_KID,title,desc:val("f-desc").trim(),
-    owner:segVal("f-owner"),priority:segVal("f-pri"),due:val("f-due"),
-    done:false,comments:[],createdBy:ME,createdAt:Date.now()});
-  logActivity(`הוסיף/ה משימה ל${KIDS[CUR_KID].name}: ${title}`,"✅");
+  const data={title,desc:val("f-desc").trim(),owner:segVal("f-owner"),priority:segVal("f-pri"),due:val("f-due")};
+  if(EDIT_ID){ Object.assign(STATE.tasks.find(x=>x.id===EDIT_ID),data); }
+  else STATE.tasks.push(Object.assign({id:uid(),kid:CUR_KID,done:false,comments:[],createdBy:ME,createdAt:Date.now()},data));
+  logActivity(`משימה ל${KIDS[CUR_KID].name}: ${title}`,"✅");
   closeSheet(); pushCloud(); render();
 }
+function editTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(t) openTaskForm(t); }
 function toggleTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t)return;
   t.done=!t.done; if(t.done){t.doneBy=ME;t.doneAt=Date.now(); logActivity(`סימן/ה כבוצע: ${t.title}`,"✔️");}
   pushCloud(); render(); }
@@ -564,7 +569,7 @@ function viewShopping(){
     return `<div class="item">
       <div class="row spread">
         <div class="row"><div class="chk" onclick="buyItem('${s.id}')" title="סמן כנקנה"></div>
-          <div><h4>${esc(s.name)}</h4>
+          <div onclick="editShop('${s.id}')" style="cursor:pointer"><h4>${esc(s.name)} <span class="tiny">✏️</span></h4>
           <div class="row" style="gap:6px;margin-top:4px;flex-wrap:wrap">
             ${s.qty?`<span class="pill plan">×${esc(s.qty)}</span>`:""}
             <span class="pill ${u[0]}">${u[1]}</span>
@@ -584,26 +589,29 @@ function viewShopping(){
   return html;
 }
 const urg=s=>({high:3,mid:2,low:1}[s.urgency]||0);
-function openShopForm(){
-  editing=true;
-  sheet(`<h3>מה חסר? · ${KIDS[CUR_KID].name}</h3>
-    <div class="field"><label>הפריט</label><input id="f-name" placeholder="חיתולים / מזון / בגדים…"></div>
-    <div class="field"><label>כמות (רשות)</label><input id="f-qty" placeholder="2 חבילות"></div>
+function openShopForm(s){
+  editing=true; EDIT_ID = s?s.id:null;
+  sheet(`<h3>${s?"עריכת פריט":"מה חסר?"} · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>הפריט</label><input id="f-name" value="${s?esc(s.name):""}" placeholder="חיתולים / מזון / בגדים…"></div>
+    <div class="field"><label>כמות (רשות)</label><input id="f-qty" value="${s?esc(s.qty||""):""}" placeholder="2 חבילות"></div>
     <div class="field"><label>דחיפות</label>
-      <div class="seg" id="f-urg"><button data-v="high">דחוף</button><button data-v="mid" class="on">רגיל</button><button data-v="low">כשאפשר</button></div></div>
+      ${segHTML("f-urg",[["high","דחוף"],["mid","רגיל"],["low","כשאפשר"]], s?s.urgency:"mid")}</div>
     <div class="field"><label>באיזה בית חסר</label>
-      <div class="seg" id="f-where"><button data-v="dad">אצל אבא</button><button data-v="mom">אצל אמא</button><button data-v="both" class="on">בשניהם</button></div></div>
-    <button class="save" onclick="saveShop()">הוספה</button>
+      ${segHTML("f-where",[["dad","אצל אבא"],["mom","אצל אמא"],["both","בשניהם"]], s?s.where:"both")}</div>
+    <button class="save" onclick="saveShop()">שמירה</button>
+    ${s?`<div class="cancel" style="color:var(--danger);font-weight:800" onclick="delShop('${s.id}');closeSheet()">🗑 מחיקת הפריט</div>`:""}
     <div class="cancel" onclick="closeSheet()">ביטול</div>`);
   segify();
 }
 function saveShop(){
   const name=val("f-name").trim(); if(!name){alert("צריך שם פריט");return;}
-  STATE.shopping.push({id:uid(),kid:CUR_KID,name,qty:val("f-qty").trim(),
-    urgency:segVal("f-urg"),where:segVal("f-where"),bought:false,createdBy:ME,createdAt:Date.now()});
-  logActivity(`הוסיף/ה חוסר ל${KIDS[CUR_KID].name}: ${name}`,"🛒");
+  const data={name,qty:val("f-qty").trim(),urgency:segVal("f-urg"),where:segVal("f-where")};
+  if(EDIT_ID){ Object.assign(STATE.shopping.find(x=>x.id===EDIT_ID),data); }
+  else STATE.shopping.push(Object.assign({id:uid(),kid:CUR_KID,bought:false,createdBy:ME,createdAt:Date.now()},data));
+  logActivity(`חוסר ל${KIDS[CUR_KID].name}: ${name}`,"🛒");
   closeSheet(); pushCloud(); render();
 }
+function editShop(id){ const s=STATE.shopping.find(x=>x.id===id); if(s) openShopForm(s); }
 function buyItem(id){
   const s=STATE.shopping.find(x=>x.id===id); if(!s)return;
   editing=true;
@@ -678,8 +686,8 @@ function viewExpenses(){
   else{
     html+=`<div class="card ${kidClass(k)}">`+ all.sort((a,b)=>b.createdAt-a.createdAt).map(e=>`
       <div class="item"><div class="row spread">
-        <div><h4>${nis(e.amount)} · ${esc(e.category)}</h4>
-          <div class="tiny">${esc(e.note||"")}${e.note?" · ":""}שילם/ה ${esc(e.paidBy)} · ${fmtDate(e.date)}</div></div>
+        <div onclick="editExp('${e.id}')" style="cursor:pointer;flex:1"><h4>${nis(e.amount)} · ${esc(e.category)}</h4>
+          <div class="tiny">${esc(e.note||"")}${e.note?" · ":""}שילם/ה ${esc(e.paidBy)} · ${fmtDate(e.date)} · ✏️ ערוך</div></div>
         <button onclick="delExp('${e.id}')" class="tiny" style="color:var(--danger)">מחק</button>
       </div></div>`).join("")+`</div>`;
     html+=`<button class="export-btn" onclick="exportCSV()">⬇️ ייצוא הוצאות ל-CSV (Excel)</button>`;
@@ -699,27 +707,31 @@ function computeSettle(){
   else text=`גל חייב לרחל ${nis(-galBalance)}`;
   return {total,paidGal,paidRachel,text};
 }
-function openExpForm(){
-  editing=true;
-  sheet(`<h3>הוצאה חדשה · ${KIDS[CUR_KID].name}</h3>
-    <div class="field"><label>סכום (₪)</label><input type="number" inputmode="decimal" id="f-amt" placeholder="0"></div>
-    <div class="field"><label>קטגוריה</label><select id="f-cat">${CATEGORIES.map(c=>`<option>${c}</option>`).join("")}</select></div>
+function openExpForm(e){
+  editing=true; EDIT_ID = e?e.id:null;
+  const paid = e?e.paidBy:ME;
+  sheet(`<h3>${e?"עריכת הוצאה":"הוצאה חדשה"} · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>סכום (₪)</label><input type="number" inputmode="decimal" id="f-amt" value="${e?e.amount:""}" placeholder="0"></div>
+    <div class="field"><label>קטגוריה</label><select id="f-cat">${CATEGORIES.map(c=>`<option ${e&&e.category===c?"selected":""}>${c}</option>`).join("")}</select></div>
     <div class="field"><label>מי שילם</label>
-      <div class="seg" id="f-paid"><button data-v="גל" class="${ME==="גל"?"on":""}">גל</button><button data-v="רחל" class="${ME==="רחל"?"on":""}">רחל</button></div></div>
-    <div class="field"><label>תאריך</label><input type="date" id="f-date" value="${todayISO()}"></div>
-    <div class="field"><label>הערה (רשות)</label><input id="f-note" placeholder="על מה ההוצאה"></div>
+      <div class="seg" id="f-paid"><button data-v="גל" class="${paid==="גל"?"on":""}">גל</button><button data-v="רחל" class="${paid==="רחל"?"on":""}">רחל</button></div></div>
+    <div class="field"><label>תאריך</label><input type="date" id="f-date" value="${e?e.date:todayISO()}"></div>
+    <div class="field"><label>הערה (רשות)</label><input id="f-note" value="${e?esc(e.note||""):""}" placeholder="על מה ההוצאה"></div>
     <button class="save" onclick="saveExp()">שמירה</button>
+    ${e?`<div class="cancel" style="color:var(--danger);font-weight:800" onclick="delExp('${e.id}');closeSheet()">🗑 מחיקת ההוצאה</div>`:""}
     <div class="cancel" onclick="closeSheet()">ביטול</div>`);
   segify();
 }
 function saveExp(){
   const amt=+val("f-amt"); if(!amt||amt<=0){alert("צריך סכום");return;}
-  STATE.expenses.push({id:uid(),kid:CUR_KID,date:val("f-date")||todayISO(),category:val("f-cat"),
-    amount:amt,paidBy:segVal("f-paid"),note:val("f-note").trim(),createdBy:ME,createdAt:Date.now()});
-  logActivity(`רשם/ה הוצאה ל${KIDS[CUR_KID].name}: ${nis(amt)} (${val("f-cat")})`,"💰");
+  const data={category:val("f-cat"),amount:amt,paidBy:segVal("f-paid"),date:val("f-date")||todayISO(),note:val("f-note").trim()};
+  if(EDIT_ID){ Object.assign(STATE.expenses.find(x=>x.id===EDIT_ID),data); }
+  else STATE.expenses.push(Object.assign({id:uid(),kid:CUR_KID,createdBy:ME,createdAt:Date.now()},data));
+  logActivity(`הוצאה ל${KIDS[CUR_KID].name}: ${nis(amt)} (${val("f-cat")})`,"💰");
   closeSheet(); pushCloud(); render();
 }
 function delExp(id){ if(!confirm("למחוק הוצאה?"))return; STATE.expenses=STATE.expenses.filter(x=>x.id!==id); pushCloud(); render(); }
+function editExp(id){ const e=STATE.expenses.find(x=>x.id===id); if(e) openExpForm(e); }
 function openSplit(){
   editing=true;
   sheet(`<h3>יחס חלוקת הוצאות</h3>
@@ -1057,8 +1069,33 @@ function toast(msg){
   t.textContent=msg; t.classList.add("on");
   clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove("on"),1700);
 }
-/* אחרי תיעוד מהיר: תמיד להיום, תצוגת יום, לשמור ולרענן */
-function afterQuick(msg){ CUR_DIARY_DATE=null; DIARY_VIEW="day"; pushCloud(); render(); toast(msg); }
+/* אחרי תיעוד מהיר: תמיד להיום, תצוגת יומן, לשמור ולרענן */
+function afterQuick(msg){ CUR_SEC="diary"; CUR_DIARY_DATE=null; DIARY_VIEW="day"; pushCloud(); render(); toast(msg); }
+
+/* ---------- כפתור צף: בורר תיעוד מהיר (מכל מסך) ---------- */
+function openQuickPicker(){
+  const opts=[
+    ["🍽️","אכלה","qmeal"],["😴","נרדמה","sleep"],["☀️","התעוררה","wake"],
+    ["💩","קקי","poop"],["💧","פיפי","wet"],
+    ["😊","מצב רוח","mood"],["📝","הערה","note"],["➕","אוכל מפורט","meal"]
+  ];
+  sheet(`<h3>מה לתעד עכשיו? · ${KIDS[CUR_KID].name} ${KIDS[CUR_KID].emoji}</h3>
+    <div class="tiny" style="color:var(--muted);margin:-6px 0 12px">נרשם אוטומטית עם השעה (${nowHHMM()}) והתאריך של היום</div>
+    <div class="qgrid">${opts.map(o=>`<button onclick="quickPick('${o[2]}')">${o[0]}<span>${o[1]}</span></button>`).join("")}</div>
+    <div class="cancel" onclick="closeSheet()">סגירה</div>`);
+}
+function quickPick(key){
+  CUR_SEC="diary";
+  if(key==="mood"){ openHealthForm(); return; }   // טפסים מחליפים את הבורר
+  if(key==="note"){ openNoteForm(); return; }
+  if(key==="meal"){ openMealForm(); return; }
+  closeSheet();                                    // תיעוד מיידי
+  if(key==="qmeal") qMeal();
+  else if(key==="sleep") qSleepStart();
+  else if(key==="wake") qWake();
+  else if(key==="poop") qDiaper("קקי");
+  else if(key==="wet") qDiaper("פיפי");
+}
 
 /* ---------- תיעוד מהיר בלחיצה אחת ---------- */
 function qMeal(){
@@ -1084,7 +1121,7 @@ function wakeSleep(id){
   const e=STATE.diary.find(x=>x.id===id); if(!e)return;
   e.end=nowHHMM();
   logActivity(`רשם/ה יקיצה ל${KIDS[e.kid].name} (${sleepHours(e).toFixed(1)} ש׳)`,"☀️");
-  CUR_DIARY_DATE=null; DIARY_VIEW="day"; pushCloud(); render();
+  CUR_SEC="diary"; CUR_DIARY_DATE=null; DIARY_VIEW="day"; pushCloud(); render();
   toast(`☀️ יקיצה נרשמה · ישנה ${sleepHours(e).toFixed(1)} שעות`);
 }
 function qDiaper(v){
@@ -1108,6 +1145,7 @@ function openMealForm(e){
     <div class="field"><label>הערה (רשות)</label><textarea id="f-note" placeholder="למשל: היה ניסיון האכלה אבל לא רצתה">${e?esc(e.note||""):""}</textarea></div>
     <div class="field"><label>שעה</label><input type="time" id="f-time" value="${e?e.time:nowHHMM()}"></div>
     <button class="save" onclick="saveMeal()">שמירה</button>
+    ${delRow(e)}
     <div class="cancel" onclick="closeSheet()">ביטול</div>`);
   segify();
 }
@@ -1136,6 +1174,7 @@ function openSleepForm(e){
     <div class="field" id="sleep-attempt" style="${tried?'':'display:none'}"><label>שעת הניסיון</label><input type="time" id="f-atttime" value="${e&&tried&&e.start?e.start:nowHHMM()}"></div>
     <div class="field"><label>הערה (רשות)</label><textarea id="f-note" placeholder="למשל: ניסיון הרדמה ב-20:30 שלא הצליח / טיול בעגלה ולא נרדמה">${e?esc(e.note||""):""}</textarea></div>
     <button class="save" onclick="saveSleep()">שמירה</button>
+    ${delRow(e)}
     <div class="cancel" onclick="closeSheet()">ביטול</div>`);
   segify();
   document.querySelectorAll("#f-sleepout button").forEach(b=> b.addEventListener("click",()=>{
@@ -1162,6 +1201,7 @@ function openDiaperForm(e){
     <div class="field"><label>הערה (רשות)</label><textarea id="f-note">${e?esc(e.note||""):""}</textarea></div>
     <div class="field"><label>שעה</label><input type="time" id="f-time" value="${e?e.time:nowHHMM()}"></div>
     <button class="save" onclick="saveDiaper()">שמירה</button>
+    ${delRow(e)}
     <div class="cancel" onclick="closeSheet()">ביטול</div>`);
   segify();
 }
@@ -1177,6 +1217,7 @@ function openNoteForm(e){
     <div class="field"><label>ההערה (שני ההורים יראו)</label><textarea id="f-text" placeholder="כל דבר שכדאי שההורה השני ידע…">${e?esc(e.text||""):""}</textarea></div>
     <div class="field"><label>שעה</label><input type="time" id="f-ntime" value="${e?e.time:nowHHMM()}"></div>
     <button class="save" onclick="saveNote()">שמירה</button>
+    ${delRow(e)}
     <div class="cancel" onclick="closeSheet()">ביטול</div>`);
 }
 function saveNote(){
@@ -1201,6 +1242,7 @@ function openHealthForm(e){
     <div class="field"><label>הערה חופשית</label><textarea id="f-note" placeholder="כל דבר שכדאי שההורה השני ידע">${e?esc(e.note||""):""}</textarea></div>
     <div class="field"><label>שעה</label><input type="time" id="f-time" value="${e?e.time:nowHHMM()}"></div>
     <button class="save" onclick="saveHealth(${isBaby})">שמירה</button>
+    ${delRow(e)}
     <div class="cancel" onclick="closeSheet()">ביטול</div>`);
   segify();
 }
@@ -1223,6 +1265,8 @@ function editEntry(id){
   else openHealthForm(e);
 }
 function delDiary(id){ if(!confirm("למחוק רישום?"))return; STATE.diary=STATE.diary.filter(x=>x.id!==id); pushCloud(); render(); }
+/* כפתור מחיקה בתוך טופס עריכה (מופיע רק בעריכה) */
+function delRow(e){ return e?`<div class="cancel" style="color:var(--danger);font-weight:800" onclick="delDiary('${e.id}');closeSheet()">🗑 מחיקת הרישום</div>`:""; }
 
 /* =====================================================================
    תיק בריאות — העלאת קבצים מסווגים (בדיקות, חיסונים, מרשמים...)
@@ -1421,9 +1465,9 @@ function calDayDetail(k, iso){
     html+=`<div class="card"><div class="tiny" style="font-weight:800;color:#3f9d6d;margin-bottom:4px">📔 יומן</div>`;
     html+=sorted.map(e=>{
       const {icon,title,sub}=entryDisplay(e);
-      return `<div class="item"><div class="row" style="align-items:flex-start">
+      return `<div class="item"><div class="row" style="align-items:flex-start;cursor:pointer" onclick="editEntry('${e.id}')">
         <div class="ic" style="width:32px;height:32px;font-size:16px">${icon}</div>
-        <div><h4>${title}</h4>${sub?`<div class="muted">${sub}</div>`:""}<div class="tiny">${e.time||""} · ${esc(e.createdBy)}</div></div>
+        <div><h4>${title}</h4>${sub?`<div class="muted">${sub}</div>`:""}<div class="tiny">${e.time||""} · ${esc(e.createdBy)} · ✏️ ערוך</div></div>
       </div></div>`;
     }).join("")+`</div>`;
   }
