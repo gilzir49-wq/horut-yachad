@@ -654,7 +654,7 @@ function saveTask(){
   const data={title,desc:val("f-desc").trim(),owner:segVal("f-owner"),priority:segVal("f-pri"),due:val("f-due")};
   if(EDIT_ID){ Object.assign(STATE.tasks.find(x=>x.id===EDIT_ID),data); }
   else STATE.tasks.push(Object.assign({id:uid(),kid:CUR_KID,done:false,comments:[],createdBy:ME,createdAt:Date.now()},data));
-  logActivity(`משימה ל${KIDS[CUR_KID].name}: ${title}`,"✅");
+  if(!EDIT_ID) logActivity(`משימה חדשה ל${KIDS[CUR_KID].name}: ${title}`,"✅");
   closeSheet(); pushCloud(); render();
 }
 function editTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(t) openTaskForm(t); }
@@ -724,7 +724,7 @@ function saveShop(){
   const data={name,qty:val("f-qty").trim(),urgency:segVal("f-urg"),where:segVal("f-where")};
   if(EDIT_ID){ Object.assign(STATE.shopping.find(x=>x.id===EDIT_ID),data); }
   else STATE.shopping.push(Object.assign({id:uid(),kid:CUR_KID,bought:false,createdBy:ME,createdAt:Date.now()},data));
-  logActivity(`חוסר ל${KIDS[CUR_KID].name}: ${name}`,"🛒");
+  if(!EDIT_ID) logActivity(`חוסר חדש ל${KIDS[CUR_KID].name}: ${name}`,"🛒");
   closeSheet(); pushCloud(); render();
 }
 function editShop(id){ const s=STATE.shopping.find(x=>x.id===id); if(s) openShopForm(s); }
@@ -843,7 +843,7 @@ function saveExp(){
   const data={category:val("f-cat"),amount:amt,paidBy:segVal("f-paid"),date:val("f-date")||todayISO(),note:val("f-note").trim()};
   if(EDIT_ID){ Object.assign(STATE.expenses.find(x=>x.id===EDIT_ID),data); }
   else STATE.expenses.push(Object.assign({id:uid(),kid:CUR_KID,createdBy:ME,createdAt:Date.now()},data));
-  logActivity(`הוצאה ל${KIDS[CUR_KID].name}: ${nis(amt)} (${val("f-cat")})`,"💰");
+  if(!EDIT_ID) logActivity(`הוצאה ל${KIDS[CUR_KID].name}: ${nis(amt)} (${val("f-cat")})`,"💰");
   closeSheet(); pushCloud(); render();
 }
 function delExp(id){ if(!confirm("למחוק הוצאה?"))return; STATE.expenses=STATE.expenses.filter(x=>x.id!==id); pushCloud(); render(); }
@@ -1235,7 +1235,7 @@ function qSleepStart(){
   STATE.diary.push({id:uid(),kid:CUR_KID,date:todayISO(),type:"sleep",outcome:"slept",
     isNap:new Date().getHours()>=8&&new Date().getHours()<18, start:nowHHMM(), end:"", note:"",
     time:nowHHMM(),createdBy:ME,createdAt:Date.now()});
-  logActivity(`רשם/ה ש${KIDS[CUR_KID].name} ${gv(CUR_KID,"נרדם","נרדמה")}`,"😴");
+  // אין רישום בפיד על תחילת שינה — היקיצה תסכם הכל בשורה אחת (מונע כפילויות)
   afterQuick(`😴 ${gv(CUR_KID,"נרדם","נרדמה")} ב-${nowHHMM()} · לחצו "התעוררה" כש${gv(CUR_KID,"יתעורר","תתעורר")}`);
 }
 function qWake(){
@@ -1285,7 +1285,7 @@ function saveMeal(){
   const data={type:"meal",outcome:out,meal:segVal("f-meal"),what,amount:val("f-amount").trim(),note:val("f-note").trim(),time:val("f-time")};
   if(EDIT_ID){ Object.assign(findEntry(EDIT_ID),data); }
   else STATE.diary.push(Object.assign({id:uid(),kid:CUR_KID,date:curDiaryDate(),createdBy:ME,createdAt:Date.now()},data));
-  logActivity(`${out==="tried"?"ניסיון האכלה ל":"ארוחה ל"}${KIDS[CUR_KID].name}${what?": "+what:""}`,"🍽️");
+  if(!EDIT_ID) logActivity(`${out==="tried"?"ניסיון האכלה ל":"ארוחה ל"}${KIDS[CUR_KID].name}${what?": "+what:""}`,"🍽️");
   closeSheet(); pushCloud(); render();
 }
 function openSleepForm(e){
@@ -1331,7 +1331,7 @@ function saveSleep(){
   }
   if(EDIT_ID){ Object.assign(findEntry(EDIT_ID),data); }
   else STATE.diary.push(Object.assign({id:uid(),kid:CUR_KID,date:curDiaryDate(),createdBy:ME,createdAt:Date.now()},data));
-  logActivity(`${out==="tried"?"ניסיון הרדמה ל":"שינה ל"}${KIDS[CUR_KID].name}`,"😴");
+  if(!EDIT_ID) logActivity(`${out==="tried"?"ניסיון הרדמה ל":"שינה ל"}${KIDS[CUR_KID].name}`,"😴");
   closeSheet(); pushCloud(); render();
 }
 function openDiaperForm(e){
@@ -1366,7 +1366,7 @@ function saveNote(){
   const data={type:"note",text,time:val("f-ntime")};
   if(EDIT_ID){ Object.assign(findEntry(EDIT_ID),data); }
   else STATE.diary.push(Object.assign({id:uid(),kid:CUR_KID,date:curDiaryDate(),createdBy:ME,createdAt:Date.now()},data));
-  logActivity(`הערה ל${KIDS[CUR_KID].name}: ${text}`,"📝");
+  if(!EDIT_ID) logActivity(`הערה ל${KIDS[CUR_KID].name}: ${text}`,"📝");
   closeSheet(); pushCloud(); render();
 }
 function openHealthForm(e){
@@ -1393,7 +1393,7 @@ function saveHealth(isBaby){
   if(isBaby) data.diaper=val("f-diaper").trim(); else data.school=val("f-school").trim();
   if(EDIT_ID){ Object.assign(findEntry(EDIT_ID),data); }
   else STATE.diary.push(Object.assign({id:uid(),kid:CUR_KID,date:curDiaryDate(),createdBy:ME,createdAt:Date.now()},data));
-  logActivity(`מצב רוח/בריאות ל${KIDS[CUR_KID].name}`,"😊");
+  if(!EDIT_ID) logActivity(`מצב רוח/בריאות ל${KIDS[CUR_KID].name}`,"😊");
   closeSheet(); pushCloud(); render();
 }
 /* לחיצה על רישום → עריכה לפי הסוג */
@@ -1681,7 +1681,7 @@ function saveRecipe(){
   const data={title,meal:segVal("f-rmeal"),ingredients:val("f-ring").trim(),steps:val("f-rsteps").trim(),note:val("f-rnote").trim()};
   if(EDIT_ID){ Object.assign(STATE.recipes.find(x=>x.id===EDIT_ID),data); }
   else STATE.recipes.push(Object.assign({id:uid(),createdBy:ME,createdAt:Date.now()},data));
-  logActivity(`הוסיף/ה מתכון: ${title}`,"🍳");
+  if(!EDIT_ID) logActivity(`מתכון חדש: ${title}`,"🍳");
   closeSheet(); pushCloud(); render();
 }
 function editRecipe(id){ const r=STATE.recipes.find(x=>x.id===id); if(r) openRecipeForm(r); }
