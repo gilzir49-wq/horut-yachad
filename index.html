@@ -267,8 +267,10 @@ const CLOUD = {
   code: "2409"                        // 🔑 הקוד המשפחתי לכניסה (אפשר לשנות)
 };
 const PARENTS = ["גל","רחל"];
-const KIDS = { lavi:{name:"לביא", emoji:"👦", color:"var(--lavi)"},
-               ema :{name:"עמנואל", emoji:"👶", color:"var(--ema)"} };
+const KIDS = { lavi:{name:"לביא", emoji:"👦", color:"var(--lavi)", g:"m"},
+               ema :{name:"עמנואל", emoji:"👶", color:"var(--ema)", g:"f"} };
+// בחירת ניסוח לפי מין הילד: gv(kid, "צורת זכר", "צורת נקבה")
+function gv(k, m, f){ return (KIDS[k]&&KIDS[k].g==="m") ? m : f; }
 const CATEGORIES = ["טיפולים","קניות","חינוך","חוגים","ביגוד","בריאות","אחר"];
 const CAT_COLORS = {"טיפולים":"#6a8fd8","קניות":"#d9a441","חינוך":"#7b9e5a","חוגים":"#c05fb0",
   "ביגוד":"#5cae9e","בריאות":"#d15b56","אחר":"#9b9384"};
@@ -577,7 +579,7 @@ function viewHome(){
     sleep:{t:'stat',h:`<div class="stat" onclick="go('diary')" style="cursor:pointer"><div class="n" style="color:var(--brand)">${daySleep?daySleep.toFixed(1):"0"}<span style="font-size:13px"> ש׳</span></div><div class="l">שינה היום</div></div>`},
     meals:{t:'stat',h:`<div class="stat" onclick="go('diary')" style="cursor:pointer"><div class="n" style="color:var(--gold)">${dayMeals}</div><div class="l">ארוחות היום</div></div>`},
     settle:{t:'block',h:`<div class="settle" onclick="go('expenses')" style="cursor:pointer"><small>מאזן התחשבנות</small><div class="big">${settle.text}</div></div>`},
-    opensleep:{t:'block',h: openSleep?`<div class="wake-banner"><div>😴 <b>${KIDS[k].name}</b> נרדמה ב-${openSleep.start}${openSleep.date!==today?" ("+dayLabel(openSleep.date)+")":""} — ישנה כבר <b>${elapsedLabel(openSleep)}</b></div><button class="save" style="margin-top:8px" onclick="wakeSleep('${openSleep.id}')">☀️ סמן יקיצה עכשיו (${nowHHMM()})</button></div>`:""},
+    opensleep:{t:'block',h: openSleep?`<div class="wake-banner"><div>😴 <b>${KIDS[k].name}</b> ${gv(k,"נרדם","נרדמה")} ב-${openSleep.start}${openSleep.date!==today?" ("+dayLabel(openSleep.date)+")":""} — ${gv(k,"ישן","ישנה")} כבר <b>${elapsedLabel(openSleep)}</b></div><button class="save" style="margin-top:8px" onclick="wakeSleep('${openSleep.id}')">☀️ סמן יקיצה עכשיו (${nowHHMM()})</button></div>`:""},
     feed:{t:'block',h:feed}
   };
 
@@ -918,8 +920,8 @@ function ageInsight(k){
   const daySleep=STATE.diary.filter(e=>e.kid===k&&e.date===dt&&e.type==="sleep").reduce((x,e)=>x+sleepHours(e),0);
   let sleepMsg="";
   if(daySleep>0){
-    if(daySleep<norm[0]) sleepMsg=`ישן/ה פחות מהמומלץ (${daySleep.toFixed(1)} מול ${norm[0]}–${norm[1]} ש׳) 🔵`;
-    else if(daySleep>norm[1]) sleepMsg=`ישן/ה מעל המומלץ (${daySleep.toFixed(1)} מול ${norm[0]}–${norm[1]} ש׳)`;
+    if(daySleep<norm[0]) sleepMsg=`${gv(k,"ישן","ישנה")} פחות מהמומלץ (${daySleep.toFixed(1)} מול ${norm[0]}–${norm[1]} ש׳) 🔵`;
+    else if(daySleep>norm[1]) sleepMsg=`${gv(k,"ישן","ישנה")} מעל המומלץ (${daySleep.toFixed(1)} מול ${norm[0]}–${norm[1]} ש׳)`;
     else sleepMsg=`שעות שינה בטווח התקין (${daySleep.toFixed(1)} ש׳) ✅`;
   } else {
     sleepMsg=`מומלץ בגיל זה: ${norm[0]}–${norm[1]} שעות שינה ביממה`;
@@ -995,8 +997,8 @@ function entryDisplay(e){
       const p=[]; if(e.amount)p.push("כמות: "+esc(e.amount)); if(note)p.push(note); sub=p.join(" · "); }
   } else if(e.type==="sleep"){
     icon="😴";
-    if(e.outcome==="tried"){ title="ניסיון הרדמה (לא נרדמה)"; sub=note; }
-    else if(!e.end){ title=`נרדמ/ה ב-${e.start} · עדיין ישן/ה 🌙`; sub=note; }
+    if(e.outcome==="tried"){ title=`ניסיון הרדמה (${gv(e.kid,"לא נרדם","לא נרדמה")})`; sub=note; }
+    else if(!e.end){ title=`${gv(e.kid,"נרדם","נרדמה")} ב-${e.start} · ${gv(e.kid,"עדיין ישן","עדיין ישנה")} 🌙`; sub=note; }
     else { title=`שינה${e.isNap?" (צהריים)":""} ${e.start}–${e.end}`;
       const p=[`${sleepHours(e).toFixed(1)} שעות`]; if(e.quality)p.push(esc(e.quality)); if(note)p.push(note); sub=p.join(" · "); }
   } else if(e.type==="diaper"){
@@ -1045,7 +1047,7 @@ function viewDiary(){
   const openSleep=STATE.diary.filter(e=>e.kid===k&&e.type==="sleep"&&!e.end&&e.outcome!=="tried").sort((a,b)=>b.createdAt-a.createdAt)[0];
   if(openSleep){
     html+=`<div class="wake-banner">
-      <div>😴 <b>${KIDS[k].name}</b> נרדמה ב-${openSleep.start}${openSleep.date!==todayISO()?" ("+dayLabel(openSleep.date)+")":""} — ישנה כבר <b>${elapsedLabel(openSleep)}</b></div>
+      <div>😴 <b>${KIDS[k].name}</b> ${gv(k,"נרדם","נרדמה")} ב-${openSleep.start}${openSleep.date!==todayISO()?" ("+dayLabel(openSleep.date)+")":""} — ${gv(k,"ישן","ישנה")} כבר <b>${elapsedLabel(openSleep)}</b></div>
       <button class="save" style="margin-top:8px" onclick="wakeSleep('${openSleep.id}')">☀️ סמן יקיצה עכשיו (${nowHHMM()})</button>
     </div>`;
   }
@@ -1233,8 +1235,8 @@ function qSleepStart(){
   STATE.diary.push({id:uid(),kid:CUR_KID,date:todayISO(),type:"sleep",outcome:"slept",
     isNap:new Date().getHours()>=8&&new Date().getHours()<18, start:nowHHMM(), end:"", note:"",
     time:nowHHMM(),createdBy:ME,createdAt:Date.now()});
-  logActivity(`רשם/ה שעמנואל נרדמה`,"😴");
-  afterQuick(`😴 נרדמה ב-${nowHHMM()} · לחצו "התעוררה" כשתקום`);
+  logActivity(`רשם/ה ש${KIDS[CUR_KID].name} ${gv(CUR_KID,"נרדם","נרדמה")}`,"😴");
+  afterQuick(`😴 ${gv(CUR_KID,"נרדם","נרדמה")} ב-${nowHHMM()} · לחצו "התעוררה" כש${gv(CUR_KID,"יתעורר","תתעורר")}`);
 }
 function qWake(){
   const open=STATE.diary.filter(e=>e.kid===CUR_KID&&e.type==="sleep"&&!e.end&&e.outcome!=="tried")
@@ -1242,12 +1244,16 @@ function qWake(){
   if(!open){ toast("אין שינה פתוחה לסמן יקיצה"); return; }
   wakeSleep(open.id);
 }
+// סוגר שינה פתוחה — עם אישור, כדי שלחיצה בטעות לא תסגור אותה
 function wakeSleep(id){
   const e=STATE.diary.find(x=>x.id===id); if(!e)return;
-  e.end=nowHHMM();
-  logActivity(`רשם/ה יקיצה ל${KIDS[e.kid].name} (${sleepHours(e).toFixed(1)} ש׳)`,"☀️");
+  const end=nowHHMM();
+  const total=sleepHours(Object.assign({},e,{end:end})).toFixed(1);
+  if(!confirm(`לסמן ש${KIDS[e.kid].name} ${gv(e.kid,"התעורר","התעוררה")} עכשיו (${end})?\nסה״כ שינה: ${total} שעות\n\n(אפשר לתקן את השעה אחר כך בעריכה)`)) return;
+  e.end=end;
+  logActivity(`רשם/ה יקיצה ל${KIDS[e.kid].name} (${total} ש׳)`,"☀️");
   CUR_SEC="diary"; CUR_DIARY_DATE=null; DIARY_VIEW="day"; pushCloud(); render();
-  toast(`☀️ יקיצה נרשמה · ישנה ${sleepHours(e).toFixed(1)} שעות`);
+  toast(`☀️ יקיצה נרשמה · ${gv(e.kid,"ישן","ישנה")} ${total} שעות`);
 }
 function qDiaper(v){
   STATE.diary.push({id:uid(),kid:CUR_KID,date:todayISO(),type:"diaper",what:v,note:"",
@@ -1262,10 +1268,10 @@ function openMealForm(e){
   editing=true; EDIT_ID = e?e.id:null;
   sheet(`<h3>🍽️ ${e?"עריכת ארוחה":"ארוחה"} · ${KIDS[CUR_KID].name}</h3>
     <div class="field"><label>מה קרה</label>
-      ${segHTML("f-mealout",[["ate","אכל/ה"],["tried","ניסיון — לא רצה/תה"]], e?(e.outcome||"ate"):"ate")}</div>
+      ${segHTML("f-mealout",[["ate",gv(CUR_KID,"אכל","אכלה")],["tried",gv(CUR_KID,"ניסיון — לא רצה","ניסיון — לא רצתה")]], e?(e.outcome||"ate"):"ate")}</div>
     <div class="field"><label>איזו ארוחה</label>
       ${segHTML("f-meal",MEALS.map(m=>[m,m]), e?e.meal:mealNow())}</div>
-    <div class="field"><label>מה אכל/ה או מה הוצע</label><input id="f-what" value="${e?esc(e.what||""):""}" placeholder="דייסה / פירה / בקבוק…"></div>
+    <div class="field"><label>${gv(CUR_KID,"מה אכל","מה אכלה")} או מה הוצע</label><input id="f-what" value="${e?esc(e.what||""):""}" placeholder="דייסה / פירה / בקבוק…"></div>
     <div class="field"><label>כמה (רשות)</label><input id="f-amount" value="${e?esc(e.amount||""):""}" placeholder="120 מ״ל / חצי מנה / הכל"></div>
     <div class="field"><label>הערה (רשות)</label><textarea id="f-note" placeholder="למשל: היה ניסיון האכלה אבל לא רצתה">${e?esc(e.note||""):""}</textarea></div>
     <div class="field"><label>שעה</label><input type="time" id="f-time" value="${e?e.time:nowHHMM()}"></div>
@@ -1288,14 +1294,14 @@ function openSleepForm(e){
   const woke = e ? !!e.end : false;   // האם יש שעת יקיצה
   sheet(`<h3>😴 ${e?"עריכת שינה":"שינה"} · ${KIDS[CUR_KID].name}</h3>
     <div class="field"><label>מה קרה</label>
-      ${segHTML("f-sleepout",[["slept","ישן/ה"],["tried","ניסיון הרדמה — לא נרדם/ה"]], tried?"tried":"slept")}</div>
+      ${segHTML("f-sleepout",[["slept",gv(CUR_KID,"ישן","ישנה")],["tried",gv(CUR_KID,"ניסיון הרדמה — לא נרדם","ניסיון הרדמה — לא נרדמה")]], tried?"tried":"slept")}</div>
     <div class="field"><label>סוג</label>
       ${segHTML("f-nap",[["night","שנת לילה"],["nap","שנת צהריים"]], e&&e.isNap?"nap":"night")}</div>
     <div id="sleep-times" style="${tried?'display:none':''}">
-      <div class="field"><label>נרדם/ה בשעה</label><input type="time" id="f-start" value="${e&&e.start?e.start:nowHHMM()}"></div>
+      <div class="field"><label>${gv(CUR_KID,"נרדם","נרדמה")} בשעה</label><input type="time" id="f-start" value="${e&&e.start?e.start:nowHHMM()}"></div>
       <div class="field"><label>מצב עכשיו</label>
-        ${segHTML("f-sleepstatus",[["sleeping","🌙 עדיין ישנה"],["woke","☀️ כבר התעוררה"]], woke?"woke":"sleeping")}</div>
-      <div class="field" id="wake-field" style="${woke?'':'display:none'}"><label>התעורר/ה בשעה</label><input type="time" id="f-end" value="${e&&e.end?e.end:nowHHMM()}"></div>
+        ${segHTML("f-sleepstatus",[["sleeping",gv(CUR_KID,"🌙 עדיין ישן","🌙 עדיין ישנה")],["woke",gv(CUR_KID,"☀️ כבר התעורר","☀️ כבר התעוררה")]], woke?"woke":"sleeping")}</div>
+      <div class="field" id="wake-field" style="${woke?'':'display:none'}"><label>${gv(CUR_KID,"התעורר","התעוררה")} בשעה</label><input type="time" id="f-end" value="${e&&e.end?e.end:nowHHMM()}"></div>
       <div class="field"><label>איכות שינה</label>
         ${segHTML("f-qual",[["טובה","טובה"],["בינונית","בינונית"],["קטועה","קטועה"]], e&&e.quality?e.quality:"טובה")}</div>
     </div>
