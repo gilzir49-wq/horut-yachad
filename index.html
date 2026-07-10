@@ -833,10 +833,34 @@ function dayLabel(iso){
   return d.toLocaleDateString("he-IL",{weekday:"long",day:"numeric",month:"long"});
 }
 function sleepHours(e){
-  if(e.type!=="sleep"||!e.start||!e.end) return 0;
+  if(e.type!=="sleep"||e.outcome==="tried"||!e.start||!e.end) return 0;
   const [sh,sm]=e.start.split(":").map(Number), [eh,em]=e.end.split(":").map(Number);
   let mins=(eh*60+em)-(sh*60+sm); if(mins<0) mins+=24*60;
   return mins/60;
+}
+/* תצוגה אחידה של רישום יומן (משמש גם ביומן וגם בלוח השנה) */
+function entryDisplay(e){
+  let icon,title,sub=""; const note=e.note?esc(e.note):"";
+  if(e.type==="meal"){
+    icon="🍽️";
+    if(e.outcome==="tried"){ title=`ניסיון האכלה${e.meal?" · "+esc(e.meal):""}`;
+      const p=[]; if(e.what)p.push("הוצע: "+esc(e.what)); if(note)p.push(note); sub=p.join(" · "); }
+    else { title=`${esc(e.meal)}${e.what?" — "+esc(e.what):""}`;
+      const p=[]; if(e.amount)p.push("כמות: "+esc(e.amount)); if(note)p.push(note); sub=p.join(" · "); }
+  } else if(e.type==="sleep"){
+    icon="😴";
+    if(e.outcome==="tried"){ title="ניסיון הרדמה (לא נרדמה)"; sub=note; }
+    else { title=`שינה${e.isNap?" (צהריים)":""} ${e.start}–${e.end}`;
+      const p=[`${sleepHours(e).toFixed(1)} שעות`]; if(e.quality)p.push(esc(e.quality)); if(note)p.push(note); sub=p.join(" · "); }
+  } else if(e.type==="note"){
+    icon="📝"; title=esc(e.text||"הערה");
+  } else { // health
+    icon=e.mood?e.mood.split(" ")[0]:"😊"; title=e.mood?esc(e.mood):"מצב רוח";
+    const p=[]; if(e.temp)p.push("🌡️ "+esc(e.temp)+"°"); if(e.meds)p.push("💊 "+esc(e.meds));
+    if(e.diaper)p.push("🧷 "+esc(e.diaper)); if(e.school)p.push("🏫 "+esc(e.school)); if(note)p.push(note);
+    sub=p.join(" · ");
+  }
+  return {icon,title,sub};
 }
 function ageChip(k){
   const a=ageInfo(k);
@@ -857,7 +881,7 @@ function viewDiary(){
   const isBaby = k==="ema";
   const entries=STATE.diary.filter(e=>e.kid===k&&e.date===date).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
   const daySleep=entries.filter(e=>e.type==="sleep").reduce((a,e)=>a+sleepHours(e),0);
-  const dayMeals=entries.filter(e=>e.type==="meal").length;
+  const dayMeals=entries.filter(e=>e.type==="meal"&&e.outcome!=="tried").length;
 
   html+=`
     <div class="card ${kidClass(k)}" style="padding:10px 12px">
@@ -869,10 +893,11 @@ function viewDiary(){
     </div>`;
 
   // כפתורי הוספה מהירים
-  html+=`<div class="seg" style="margin-bottom:12px">
+  html+=`<div class="seg" style="margin-bottom:12px;flex-wrap:wrap">
       <button onclick="openMealForm()" style="background:#fff;border:1.5px solid var(--line)">🍽️ אוכל</button>
       <button onclick="openSleepForm()" style="background:#fff;border:1.5px solid var(--line)">😴 שינה</button>
       <button onclick="openHealthForm()" style="background:#fff;border:1.5px solid var(--line)">😊 מצב רוח</button>
+      <button onclick="openNoteForm()" style="background:#fff;border:1.5px solid var(--line)">📝 הערה</button>
     </div>`;
 
   // סיכום היום
@@ -888,13 +913,7 @@ function viewDiary(){
   html+=`<div class="section-title">ציר זמן</div>`;
   if(!entries.length) html+=`<div class="empty">אין רישומים ליום הזה.<br>הוסיפו אוכל / שינה / מצב רוח ☝️</div>`;
   else html+=`<div class="card">`+entries.map(e=>{
-    let icon,title,sub="";
-    if(e.type==="meal"){ icon="🍽️"; title=`${e.meal} — ${esc(e.what||"")}`; sub=e.amount?("כמות: "+esc(e.amount)):""; }
-    else if(e.type==="sleep"){ icon="😴"; const h=sleepHours(e); title=`שינה${e.isNap?" (צהריים)":""} ${e.start}–${e.end}`; sub=`${h.toFixed(1)} שעות${e.quality?" · "+esc(e.quality):""}`; }
-    else { icon=e.mood?e.mood.split(" ")[0]:"😊"; title=e.mood?esc(e.mood):"מצב רוח";
-      const parts=[]; if(e.temp)parts.push("🌡️ "+esc(e.temp)+"°"); if(e.meds)parts.push("💊 "+esc(e.meds));
-      if(e.diaper)parts.push("🧷 "+esc(e.diaper)); if(e.school)parts.push("🏫 "+esc(e.school)); if(e.note)parts.push(esc(e.note));
-      sub=parts.join(" · "); }
+    const {icon,title,sub}=entryDisplay(e);
     return `<div class="item"><div class="row spread">
       <div class="row" style="align-items:flex-start">
         <div class="ic" style="width:34px;height:34px;font-size:17px">${icon}</div>
@@ -948,10 +967,10 @@ function monthStats(k, ym){
   const daysSet=new Set(es.map(e=>e.date));
   const sleepByDay={}, mealByDay={};
   es.forEach(e=>{ if(e.type==="sleep") sleepByDay[e.date]=(sleepByDay[e.date]||0)+sleepHours(e);
-                  if(e.type==="meal") mealByDay[e.date]=(mealByDay[e.date]||0)+1; });
+                  if(e.type==="meal"&&e.outcome!=="tried") mealByDay[e.date]=(mealByDay[e.date]||0)+1; });
   const sleepDays=Object.keys(sleepByDay);
   const avgSleep=sleepDays.length? sleepDays.reduce((a,d)=>a+sleepByDay[d],0)/sleepDays.length : 0;
-  const totalMeals=es.filter(e=>e.type==="meal").length;
+  const totalMeals=es.filter(e=>e.type==="meal"&&e.outcome!=="tried").length;
   const mealDays=Object.keys(mealByDay);
   const avgMeals=mealDays.length? totalMeals/mealDays.length : 0;
   return {loggedDays:daysSet.size, avgSleep, totalMeals, avgMeals, sleepByDay, count:es.length};
@@ -1001,41 +1020,74 @@ function nowHHMM(){ const d=new Date(); return d.toTimeString().slice(0,5); }
 function openMealForm(){
   editing=true;
   sheet(`<h3>🍽️ ארוחה · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>מה קרה</label>
+      <div class="seg" id="f-mealout"><button data-v="ate" class="on">אכל/ה</button><button data-v="tried">ניסיון — לא רצה/תה</button></div></div>
     <div class="field"><label>איזו ארוחה</label>
       <div class="seg" id="f-meal">${MEALS.map((m,i)=>`<button data-v="${m}" class="${i===0?'on':''}">${m}</button>`).join("")}</div></div>
-    <div class="field"><label>מה אכל/ה</label><input id="f-what" placeholder="דייסה / פירה / בקבוק…"></div>
+    <div class="field"><label>מה אכל/ה או מה הוצע</label><input id="f-what" placeholder="דייסה / פירה / בקבוק…"></div>
     <div class="field"><label>כמה (רשות)</label><input id="f-amount" placeholder="120 מ״ל / חצי מנה / הכל"></div>
+    <div class="field"><label>הערה (רשות)</label><textarea id="f-note" placeholder="למשל: היה ניסיון האכלה אבל לא רצתה"></textarea></div>
     <div class="field"><label>שעה</label><input type="time" id="f-time" value="${nowHHMM()}"></div>
     <button class="save" onclick="saveMeal()">שמירה</button>
     <div class="cancel" onclick="closeSheet()">ביטול</div>`);
   segify();
 }
 function saveMeal(){
-  const what=val("f-what").trim();
-  STATE.diary.push({id:uid(),kid:CUR_KID,date:curDiaryDate(),type:"meal",
-    meal:segVal("f-meal"),what,amount:val("f-amount").trim(),time:val("f-time"),
+  const what=val("f-what").trim(), out=segVal("f-mealout");
+  STATE.diary.push({id:uid(),kid:CUR_KID,date:curDiaryDate(),type:"meal",outcome:out,
+    meal:segVal("f-meal"),what,amount:val("f-amount").trim(),note:val("f-note").trim(),time:val("f-time"),
     createdBy:ME,createdAt:Date.now()});
-  logActivity(`רשם/ה ל${KIDS[CUR_KID].name} ארוחת ${segVal("f-meal")}${what?": "+what:""}`,"🍽️");
+  logActivity(`${out==="tried"?"רשם/ה ניסיון האכלה ל":"רשם/ה ארוחה ל"}${KIDS[CUR_KID].name}${what?": "+what:""}`,"🍽️");
   closeSheet(); pushCloud(); render();
 }
 function openSleepForm(){
   editing=true;
   sheet(`<h3>😴 שינה · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>מה קרה</label>
+      <div class="seg" id="f-sleepout"><button data-v="slept" class="on">ישן/ה</button><button data-v="tried">ניסיון הרדמה — לא נרדם/ה</button></div></div>
     <div class="field"><label>סוג</label>
       <div class="seg" id="f-nap"><button data-v="night" class="on">שנת לילה</button><button data-v="nap">שנת צהריים</button></div></div>
-    <div class="field"><label>נרדם/ה בשעה</label><input type="time" id="f-start" value="${nowHHMM()}"></div>
-    <div class="field"><label>התעורר/ה בשעה</label><input type="time" id="f-end" value="${nowHHMM()}"></div>
-    <div class="field"><label>איכות שינה</label>
-      <div class="seg" id="f-qual"><button data-v="טובה" class="on">טובה</button><button data-v="בינונית">בינונית</button><button data-v="קטועה">קטועה</button></div></div>
+    <div id="sleep-times">
+      <div class="field"><label>נרדם/ה בשעה</label><input type="time" id="f-start" value="${nowHHMM()}"></div>
+      <div class="field"><label>התעורר/ה בשעה</label><input type="time" id="f-end" value="${nowHHMM()}"></div>
+      <div class="field"><label>איכות שינה</label>
+        <div class="seg" id="f-qual"><button data-v="טובה" class="on">טובה</button><button data-v="בינונית">בינונית</button><button data-v="קטועה">קטועה</button></div></div>
+    </div>
+    <div class="field" id="sleep-attempt" style="display:none"><label>שעת הניסיון</label><input type="time" id="f-atttime" value="${nowHHMM()}"></div>
+    <div class="field"><label>הערה (רשות)</label><textarea id="f-note" placeholder="למשל: ניסיון הרדמה ב-20:30 שלא הצליח / טיול בעגלה ולא נרדמה"></textarea></div>
     <button class="save" onclick="saveSleep()">שמירה</button>
     <div class="cancel" onclick="closeSheet()">ביטול</div>`);
   segify();
+  // הצגת/הסתרת שדות לפי "ישן" או "ניסיון"
+  document.querySelectorAll("#f-sleepout button").forEach(b=> b.addEventListener("click",()=>{
+    const tried=b.dataset.v==="tried";
+    document.getElementById("sleep-times").style.display=tried?"none":"block";
+    document.getElementById("sleep-attempt").style.display=tried?"block":"none";
+  }));
 }
 function saveSleep(){
-  STATE.diary.push({id:uid(),kid:CUR_KID,date:curDiaryDate(),type:"sleep",
-    start:val("f-start"),end:val("f-end"),isNap:segVal("f-nap")==="nap",quality:segVal("f-qual"),
-    time:val("f-start"),createdBy:ME,createdAt:Date.now()});
-  logActivity(`רשם/ה שינה ל${KIDS[CUR_KID].name}`,"😴");
+  const out=segVal("f-sleepout");
+  const e={id:uid(),kid:CUR_KID,date:curDiaryDate(),type:"sleep",outcome:out,
+    isNap:segVal("f-nap")==="nap",note:val("f-note").trim(),createdBy:ME,createdAt:Date.now()};
+  if(out==="tried"){ e.start=val("f-atttime"); e.end=""; e.time=val("f-atttime"); }
+  else { e.start=val("f-start"); e.end=val("f-end"); e.quality=segVal("f-qual"); e.time=val("f-start"); }
+  STATE.diary.push(e);
+  logActivity(`${out==="tried"?"רשם/ה ניסיון הרדמה ל":"רשם/ה שינה ל"}${KIDS[CUR_KID].name}`,"😴");
+  closeSheet(); pushCloud(); render();
+}
+function openNoteForm(){
+  editing=true;
+  sheet(`<h3>📝 הערה · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>ההערה (שני ההורים יראו)</label><textarea id="f-text" placeholder="כל דבר שכדאי שההורה השני ידע…"></textarea></div>
+    <div class="field"><label>שעה</label><input type="time" id="f-ntime" value="${nowHHMM()}"></div>
+    <button class="save" onclick="saveNote()">שמירה</button>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+}
+function saveNote(){
+  const text=val("f-text").trim(); if(!text){ alert("כתבו הערה"); return; }
+  STATE.diary.push({id:uid(),kid:CUR_KID,date:curDiaryDate(),type:"note",text,time:val("f-ntime"),
+    createdBy:ME,createdAt:Date.now()});
+  logActivity(`הוסיף/ה הערה ל${KIDS[CUR_KID].name}: ${text}`,"📝");
   closeSheet(); pushCloud(); render();
 }
 function openHealthForm(){
@@ -1262,13 +1314,7 @@ function calDayDetail(k, iso){
     const sorted=a.diary.slice().sort((x,z)=>(x.time||"").localeCompare(z.time||""));
     html+=`<div class="card"><div class="tiny" style="font-weight:800;color:#3f9d6d;margin-bottom:4px">📔 יומן</div>`;
     html+=sorted.map(e=>{
-      let icon,title,sub="";
-      if(e.type==="meal"){ icon="🍽️"; title=`${e.meal} — ${esc(e.what||"")}`; sub=e.amount?("כמות: "+esc(e.amount)):""; }
-      else if(e.type==="sleep"){ icon="😴"; title=`שינה${e.isNap?" (צהריים)":""} ${e.start}–${e.end}`; sub=`${sleepHours(e).toFixed(1)} שעות${e.quality?" · "+esc(e.quality):""}`; }
-      else { icon=e.mood?e.mood.split(" ")[0]:"😊"; title=e.mood?esc(e.mood):"מצב רוח";
-        const parts=[]; if(e.temp)parts.push("🌡️ "+esc(e.temp)+"°"); if(e.meds)parts.push("💊 "+esc(e.meds));
-        if(e.diaper)parts.push("🧷 "+esc(e.diaper)); if(e.school)parts.push("🏫 "+esc(e.school)); if(e.note)parts.push(esc(e.note));
-        sub=parts.join(" · "); }
+      const {icon,title,sub}=entryDisplay(e);
       return `<div class="item"><div class="row" style="align-items:flex-start">
         <div class="ic" style="width:32px;height:32px;font-size:16px">${icon}</div>
         <div><h4>${title}</h4>${sub?`<div class="muted">${sub}</div>`:""}<div class="tiny">${e.time||""} · ${esc(e.createdBy)}</div></div>
