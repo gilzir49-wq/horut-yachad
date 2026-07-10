@@ -1275,6 +1275,7 @@ function saveMeal(){
 function openSleepForm(e){
   editing=true; EDIT_ID = e?e.id:null;
   const tried = e?e.outcome==="tried":false;
+  const woke = e ? !!e.end : false;   // האם יש שעת יקיצה
   sheet(`<h3>😴 ${e?"עריכת שינה":"שינה"} · ${KIDS[CUR_KID].name}</h3>
     <div class="field"><label>מה קרה</label>
       ${segHTML("f-sleepout",[["slept","ישן/ה"],["tried","ניסיון הרדמה — לא נרדם/ה"]], tried?"tried":"slept")}</div>
@@ -1282,7 +1283,9 @@ function openSleepForm(e){
       ${segHTML("f-nap",[["night","שנת לילה"],["nap","שנת צהריים"]], e&&e.isNap?"nap":"night")}</div>
     <div id="sleep-times" style="${tried?'display:none':''}">
       <div class="field"><label>נרדם/ה בשעה</label><input type="time" id="f-start" value="${e&&e.start?e.start:nowHHMM()}"></div>
-      <div class="field"><label>התעורר/ה בשעה <span class="tiny">(ריק = עדיין ישנה)</span></label><input type="time" id="f-end" value="${e&&e.end?e.end:''}"></div>
+      <div class="field"><label>מצב עכשיו</label>
+        ${segHTML("f-sleepstatus",[["sleeping","🌙 עדיין ישנה"],["woke","☀️ כבר התעוררה"]], woke?"woke":"sleeping")}</div>
+      <div class="field" id="wake-field" style="${woke?'':'display:none'}"><label>התעורר/ה בשעה</label><input type="time" id="f-end" value="${e&&e.end?e.end:nowHHMM()}"></div>
       <div class="field"><label>איכות שינה</label>
         ${segHTML("f-qual",[["טובה","טובה"],["בינונית","בינונית"],["קטועה","קטועה"]], e&&e.quality?e.quality:"טובה")}</div>
     </div>
@@ -1297,12 +1300,19 @@ function openSleepForm(e){
     document.getElementById("sleep-times").style.display=t?"none":"block";
     document.getElementById("sleep-attempt").style.display=t?"block":"none";
   }));
+  document.querySelectorAll("#f-sleepstatus button").forEach(b=> b.addEventListener("click",()=>{
+    document.getElementById("wake-field").style.display = b.dataset.v==="woke" ? "block" : "none";
+  }));
 }
 function saveSleep(){
   const out=segVal("f-sleepout");
   const data={type:"sleep",outcome:out,isNap:segVal("f-nap")==="nap",note:val("f-note").trim()};
   if(out==="tried"){ data.start=val("f-atttime"); data.end=""; data.time=val("f-atttime"); data.quality=""; }
-  else { data.start=val("f-start"); data.end=val("f-end"); data.quality=segVal("f-qual"); data.time=val("f-start"); }
+  else {
+    data.start=val("f-start");
+    data.end = (segVal("f-sleepstatus")==="woke") ? val("f-end") : "";   // עדיין ישנה = ללא שעת יקיצה
+    data.quality=segVal("f-qual"); data.time=val("f-start");
+  }
   if(EDIT_ID){ Object.assign(findEntry(EDIT_ID),data); }
   else STATE.diary.push(Object.assign({id:uid(),kid:CUR_KID,date:curDiaryDate(),createdBy:ME,createdAt:Date.now()},data));
   logActivity(`${out==="tried"?"ניסיון הרדמה ל":"שינה ל"}${KIDS[CUR_KID].name}`,"😴");
