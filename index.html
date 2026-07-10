@@ -186,13 +186,11 @@ main{padding:8px 16px}
     <div class="logo">👨‍👩‍👧</div>
     <h1>הורות יחד</h1>
     <p>לביא ועמנואל · מקום אחד לשנינו</p>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:12px">מי נכנס/ת? (פעם אחת, נזכר תמיד)</div>
     <div class="who">
       <button data-who="גל"><span class="em">👨</span>גל</button>
       <button data-who="רחל"><span class="em">👩</span>רחל</button>
     </div>
-    <input id="code" type="tel" inputmode="numeric" placeholder="קוד משפחתי" maxlength="8" autocomplete="off">
-    <button class="go" id="loginGo" disabled>כניסה</button>
-    <div class="login-err" id="loginErr"></div>
   </div>
 </div>
 
@@ -240,12 +238,15 @@ let ME = null;              // ההורה המחובר
 let CUR_KID = "lavi";       // הילד הנבחר
 let CUR_SEC = "home";       // הלשונית הפעילה
 let CUR_DIARY_DATE = null;  // תאריך היומן המוצג (null = היום)
+let DIARY_VIEW = "day";     // "day" או "month"
+let CUR_MONTH = null;       // חודש נבחר בארכיון (YYYY-MM); null = החודש הנוכחי
 let lastUpdated = 0;
 let editing = false;        // מונע דריסה תוך כדי מילוי טופס
 
 function defaultState(){
   return {
-    tasks:[], shopping:[], expenses:[], diary:[],
+    tasks:[], shopping:[], expenses:[], diary:[], files:[],
+    profiles:{ lavi:{birth:""}, ema:{birth:""} },   // תאריכי לידה
     settings:{ splitGal:50 },   // אחוז שגל צריך לשאת; רחל = המשלים
     activity:[],
     updatedAt:0
@@ -311,26 +312,10 @@ function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">
 /* =====================================================================
    התחברות
    ===================================================================== */
-let pickWho=null;
+// כניסה בלחיצה — בוחרים מי אתם, בלי קוד. הבחירה נזכרת לתמיד במכשיר.
 document.querySelectorAll(".who button").forEach(b=>{
-  b.onclick=()=>{ pickWho=b.dataset.who;
-    document.querySelectorAll(".who button").forEach(x=>x.classList.remove("sel"));
-    b.classList.add("sel"); checkLogin(); };
+  b.onclick=()=>{ ME=b.dataset.who; localStorage.setItem("horut_me", ME); startApp(); };
 });
-const codeInput=document.getElementById("code");
-codeInput.oninput=checkLogin;
-function checkLogin(){ document.getElementById("loginGo").disabled = !(pickWho && codeInput.value.length>=3); }
-document.getElementById("loginGo").onclick=doLogin;
-codeInput.addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
-function doLogin(){
-  if(codeInput.value.trim()!==CLOUD.code){
-    document.getElementById("loginErr").textContent="קוד שגוי, נסו שוב";
-    codeInput.value=""; checkLogin(); return;
-  }
-  ME=pickWho;
-  localStorage.setItem("horut_me", ME);
-  startApp();
-}
 document.getElementById("logout").onclick=()=>{ localStorage.removeItem("horut_me"); location.reload(); };
 
 async function startApp(){
@@ -346,6 +331,10 @@ async function startApp(){
 
 /* דוגמת נתונים ראשונית (רק אם הענן ריק) */
 function seedIfEmpty(){
+  // תאריכי לידה לדוגמה — עדכנו בפרופיל של כל ילד
+  const d1=new Date(Date.now()-8*30*864e5).toISOString().slice(0,10);   // עמנואל ~8 חודשים
+  const d2=new Date(Date.now()-6*365*864e5).toISOString().slice(0,10);  // לביא ~6 שנים
+  STATE.profiles={ lavi:{birth:d2}, ema:{birth:d1} };
   STATE.tasks=[
     {id:uid(),kid:"lavi",title:"לתאם חיסון שנתי",desc:"טיפת חלב",owner:"שנינו",due:todayISO(),
      priority:"mid",done:false,comments:[],createdBy:"גל",createdAt:Date.now()-8e6},
@@ -383,6 +372,7 @@ const SECTIONS=[
   {id:"tasks", label:"✅ משימות"},
   {id:"shopping", label:"🛒 קניות"},
   {id:"expenses", label:"💰 הוצאות"},
+  {id:"files", label:"📁 תיק בריאות"},
 ];
 document.querySelectorAll(".kid").forEach(b=>{
   b.onclick=()=>{ CUR_KID=b.dataset.k;
@@ -402,6 +392,7 @@ function render(){
   else if(CUR_SEC==="tasks") m.innerHTML=viewTasks();
   else if(CUR_SEC==="shopping") m.innerHTML=viewShopping();
   else if(CUR_SEC==="expenses") m.innerHTML=viewExpenses();
+  else if(CUR_SEC==="files") m.innerHTML=viewFiles();
   bindMain();
 }
 const kidClass = k => k==="lavi"?"k-lavi":"k-ema";
@@ -707,6 +698,84 @@ function exportCSV(){
 }
 
 /* =====================================================================
+   גיל, נורמות והתפתחות (לפי תאריך לידה)
+   ===================================================================== */
+function birthOf(k){ return (STATE.profiles&&STATE.profiles[k]&&STATE.profiles[k].birth)||""; }
+function ageInfo(k){
+  const b=birthOf(k); if(!b) return null;
+  const bd=new Date(b+"T00:00"), now=new Date();
+  let months=(now.getFullYear()-bd.getFullYear())*12+(now.getMonth()-bd.getMonth());
+  if(now.getDate()<bd.getDate()) months--;
+  const totalDays=Math.floor((now-bd)/864e5);
+  const years=Math.floor(months/12), rem=months%12;
+  let label;
+  if(months<1) label=totalDays+" ימים";
+  else if(months<24) label=months+" חודשים";
+  else label=years+" שנים"+(rem?` ו-${rem} חו׳`:"");
+  return {months, totalDays, years, label};
+}
+/* נורמות שינה מומלצות (24 שעות כולל צהריים) לפי גיל בחודשים */
+function sleepNorm(months){
+  if(months<4)  return [14,17];
+  if(months<12) return [12,16];
+  if(months<24) return [11,14];
+  if(months<36) return [10,13];
+  if(months<72) return [10,13];
+  return [9,12];
+}
+/* אבני דרך התפתחותיות עיקריות לפי גיל */
+const MILESTONES=[
+  {m:2, t:"חיוך חברתי, מתחילה לעקוב אחרי פנים ולהשמיע קולות"},
+  {m:4, t:"מחזיקה ראש יציב, צוחקת, מושיטה יד לחפצים"},
+  {m:6, t:"מתהפכת, יושבת בתמיכה, מתחילה מזון מוצק"},
+  {m:9, t:"יושבת לבד, זוחלת, אומרת הברות (בא-בא/מא-מא)"},
+  {m:12, t:"עומדת/צועדת בהיאחזות, מילה ראשונה, מצביעה"},
+  {m:18, t:"הולכת בביטחון, כמה מילים, שותה מכוס"},
+  {m:24, t:"רצה, מרכיבה 2 מילים, מדרגות בעזרה"},
+  {m:36, t:"משפטים, משחק דמיוני, מתחילה גמילה"},
+];
+function nextMilestone(months){
+  for(const ms of MILESTONES){ if(months < ms.m+1) return ms; }
+  return null;
+}
+function ageInsight(k){
+  const a=ageInfo(k); if(!a) return "";
+  const norm=sleepNorm(a.months);
+  const dt=curDiaryDate();
+  const daySleep=STATE.diary.filter(e=>e.kid===k&&e.date===dt&&e.type==="sleep").reduce((x,e)=>x+sleepHours(e),0);
+  let sleepMsg="";
+  if(daySleep>0){
+    if(daySleep<norm[0]) sleepMsg=`ישן/ה פחות מהמומלץ (${daySleep.toFixed(1)} מול ${norm[0]}–${norm[1]} ש׳) 🔵`;
+    else if(daySleep>norm[1]) sleepMsg=`ישן/ה מעל המומלץ (${daySleep.toFixed(1)} מול ${norm[0]}–${norm[1]} ש׳)`;
+    else sleepMsg=`שעות שינה בטווח התקין (${daySleep.toFixed(1)} ש׳) ✅`;
+  } else {
+    sleepMsg=`מומלץ בגיל זה: ${norm[0]}–${norm[1]} שעות שינה ביממה`;
+  }
+  const ms=nextMilestone(a.months);
+  const msMsg=ms?`בסביבות גיל ${ms.m} חודשים: ${ms.t}`:"";
+  return `<div class="card ${kidClass(k)}" style="background:#fbfaf6">
+      <div class="tiny" style="font-weight:800;color:var(--brand-d);margin-bottom:6px">🌱 תובנות לגיל ${a.label}</div>
+      <div style="font-size:13.5px;margin-bottom:6px">😴 ${sleepMsg}</div>
+      ${msMsg?`<div style="font-size:13.5px">🧩 ${msMsg}</div>`:""}
+    </div>`;
+}
+function openProfile(k){
+  editing=true;
+  const b=birthOf(k), a=ageInfo(k);
+  sheet(`<h3>פרופיל ${KIDS[k].name} ${KIDS[k].emoji}</h3>
+    <div class="field"><label>תאריך לידה</label><input type="date" id="f-birth" value="${b}" max="${todayISO()}"></div>
+    ${a?`<p class="muted">גיל נוכחי: <b>${a.label}</b></p>`:`<p class="muted">הזינו תאריך לידה כדי לקבל גיל ותובנות התפתחות אוטומטיות.</p>`}
+    <button class="save" onclick="saveProfile('${k}')">שמירה</button>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+}
+function saveProfile(k){
+  STATE.profiles=STATE.profiles||{lavi:{birth:""},ema:{birth:""}};
+  STATE.profiles[k]={birth:val("f-birth")};
+  logActivity(`עדכן/ה תאריך לידה ל${KIDS[k].name}`,"🎂");
+  closeSheet(); pushCloud(); render();
+}
+
+/* =====================================================================
    יומן יומי (אוכל · שינה · מצב רוח/בריאות) — לעמנואל וללביא
    ===================================================================== */
 const MEALS=["בוקר","צהריים","ערב","ביניים"];
@@ -731,14 +800,28 @@ function sleepHours(e){
   let mins=(eh*60+em)-(sh*60+sm); if(mins<0) mins+=24*60;
   return mins/60;
 }
+function ageChip(k){
+  const a=ageInfo(k);
+  return `<button onclick="openProfile('${k}')" class="pill who" style="font-weight:700;padding:4px 11px">
+    ${a?`🎂 גיל ${a.label}`:"➕ הזינו תאריך לידה"}</button>`;
+}
 function viewDiary(){
-  const k=CUR_KID, date=curDiaryDate();
+  const k=CUR_KID;
+  // מתג יום / חודש
+  let html=`<div class="seg" style="margin-bottom:12px">
+      <button class="${DIARY_VIEW==='day'?'on':''}" onclick="setDiaryView('day')">📔 יומן יומי</button>
+      <button class="${DIARY_VIEW==='month'?'on':''}" onclick="setDiaryView('month')">📅 ארכיון חודשי</button>
+    </div>`;
+  html+=`<div class="row" style="justify-content:center;margin-bottom:10px">${ageChip(k)}</div>`;
+  if(DIARY_VIEW==="month") return html + viewDiaryMonth(k);
+
+  const date=curDiaryDate();
   const isBaby = k==="ema";
   const entries=STATE.diary.filter(e=>e.kid===k&&e.date===date).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
   const daySleep=entries.filter(e=>e.type==="sleep").reduce((a,e)=>a+sleepHours(e),0);
   const dayMeals=entries.filter(e=>e.type==="meal").length;
 
-  let html=`
+  html+=`
     <div class="card ${kidClass(k)}" style="padding:10px 12px">
       <div class="row spread">
         <button onclick="shiftDiary(-1)" style="font-size:20px;color:var(--brand);padding:4px 10px">›</button>
@@ -759,6 +842,9 @@ function viewDiary(){
     <div class="stat"><div class="n" style="color:var(--brand)">${daySleep?daySleep.toFixed(1):"0"}<span style="font-size:13px"> ש׳</span></div><div class="l">שינה היום</div></div>
     <div class="stat"><div class="n" style="color:var(--gold)">${dayMeals}</div><div class="l">ארוחות היום</div></div>
   </div>`;
+
+  // תובנות לפי גיל (אם הוזן תאריך לידה)
+  html+=ageInsight(k);
 
   // ציר זמן
   html+=`<div class="section-title">ציר זמן</div>`;
@@ -805,6 +891,73 @@ function weeklyTrends(k){
       ${barsChart(sleepBy,maxS,"var(--"+(k==="ema"?"ema":"lavi")+")","h")}</div>
     <div class="card"><div class="tiny" style="font-weight:700;color:var(--brand-d)">🍽️ מספר ארוחות ליום</div>
       ${barsChart(mealsBy,maxM,"var(--gold)","n")}</div>`;
+}
+/* ---------- ארכיון חודשי + השוואת מגמות בין חודשים ---------- */
+function setDiaryView(v){ DIARY_VIEW=v; render(); }
+function curMonth(){ return CUR_MONTH || todayISO().slice(0,7); }   // YYYY-MM
+function shiftMonth(n){
+  const [y,m]=curMonth().split("-").map(Number);
+  const d=new Date(y, m-1+n, 1);
+  const iso=d.toISOString().slice(0,7);
+  CUR_MONTH = (iso===todayISO().slice(0,7)) ? null : iso;
+  render();
+}
+function monthLabel(ym){ const [y,m]=ym.split("-").map(Number);
+  return new Date(y,m-1,1).toLocaleDateString("he-IL",{month:"long",year:"numeric"}); }
+/* מדדי חודש: ממוצע שינה/יום, סה״כ+ממוצע ארוחות, ימים עם רישום */
+function monthStats(k, ym){
+  const es=STATE.diary.filter(e=>e.kid===k && (e.date||"").slice(0,7)===ym);
+  const daysSet=new Set(es.map(e=>e.date));
+  const sleepByDay={}, mealByDay={};
+  es.forEach(e=>{ if(e.type==="sleep") sleepByDay[e.date]=(sleepByDay[e.date]||0)+sleepHours(e);
+                  if(e.type==="meal") mealByDay[e.date]=(mealByDay[e.date]||0)+1; });
+  const sleepDays=Object.keys(sleepByDay);
+  const avgSleep=sleepDays.length? sleepDays.reduce((a,d)=>a+sleepByDay[d],0)/sleepDays.length : 0;
+  const totalMeals=es.filter(e=>e.type==="meal").length;
+  const mealDays=Object.keys(mealByDay);
+  const avgMeals=mealDays.length? totalMeals/mealDays.length : 0;
+  return {loggedDays:daysSet.size, avgSleep, totalMeals, avgMeals, sleepByDay, count:es.length};
+}
+function viewDiaryMonth(k){
+  const ym=curMonth(), st=monthStats(k,ym);
+  // חודש קודם להשוואה
+  const [y,m]=ym.split("-").map(Number);
+  const prevYm=new Date(y,m-2,1).toISOString().slice(0,7);
+  const prev=monthStats(k,prevYm);
+  const delta=(st.avgSleep&&prev.avgSleep)? st.avgSleep-prev.avgSleep : null;
+  let deltaTxt="";
+  if(delta!==null){
+    const arr=delta>0.1?"⬆️ עלייה":delta<-0.1?"⬇️ ירידה":"➡️ יציב";
+    deltaTxt=`${arr} של ${Math.abs(delta).toFixed(1)} ש׳ בממוצע השינה מול ${monthLabel(prevYm)}`;
+  }
+  // גרף שינה יומי לאורך החודש
+  const daysInMonth=new Date(y,m,0).getDate();
+  const sb=st.sleepByDay;
+  const maxS=Math.max(1,...Object.values(sb));
+  let bars=`<div class="row" style="align-items:flex-end;gap:2px;height:90px;margin-top:8px">`;
+  for(let d=1; d<=daysInMonth; d++){
+    const dd=ym+"-"+String(d).padStart(2,"0"); const v=sb[dd]||0;
+    bars+=`<div style="flex:1" title="${d}: ${v.toFixed(1)}ש׳">
+      <div style="height:80px;display:flex;align-items:flex-end"><div style="width:100%;border-radius:3px 3px 0 0;background:var(--${k==="ema"?"ema":"lavi"});height:${Math.max(2,(v/maxS)*80)}px"></div></div>
+    </div>`;
+  }
+  bars+=`</div>`;
+
+  let html=`<div class="card" style="padding:10px 12px">
+      <div class="row spread">
+        <button onclick="shiftMonth(-1)" style="font-size:20px;color:var(--brand);padding:4px 10px">›</button>
+        <div style="text-align:center"><b>${monthLabel(ym)}</b><div class="tiny">${st.loggedDays} ימים עם רישום</div></div>
+        <button onclick="shiftMonth(1)" ${ym>=todayISO().slice(0,7)?'disabled style="opacity:.3;padding:4px 10px;font-size:20px"':'style="font-size:20px;color:var(--brand);padding:4px 10px"'}>‹</button>
+      </div>
+    </div>`;
+  if(!st.count) return html+`<div class="empty">אין רישומים בחודש הזה.<br>אפשר לדפדף אחורה עם החיצים ›</div>`;
+  html+=`<div class="stat-grid">
+      <div class="stat"><div class="n" style="color:var(--brand)">${st.avgSleep.toFixed(1)}<span style="font-size:13px"> ש׳</span></div><div class="l">ממוצע שינה ליום</div></div>
+      <div class="stat"><div class="n" style="color:var(--gold)">${st.avgMeals.toFixed(1)}</div><div class="l">ממוצע ארוחות ליום</div></div>
+    </div>`;
+  if(deltaTxt) html+=`<div class="card ${kidClass(k)}" style="background:#fbfaf6"><div style="font-size:13.5px">📈 ${deltaTxt}</div></div>`;
+  html+=`<div class="card"><div class="tiny" style="font-weight:700;color:var(--brand-d)">😴 שעות שינה לאורך החודש (לפי יום)</div>${bars}</div>`;
+  return html;
 }
 function nowHHMM(){ const d=new Date(); return d.toTimeString().slice(0,5); }
 function openMealForm(){
@@ -874,6 +1027,114 @@ function saveHealth(isBaby){
   closeSheet(); pushCloud(); render();
 }
 function delDiary(id){ if(!confirm("למחוק רישום?"))return; STATE.diary=STATE.diary.filter(x=>x.id!==id); pushCloud(); render(); }
+
+/* =====================================================================
+   תיק בריאות — העלאת קבצים מסווגים (בדיקות, חיסונים, מרשמים...)
+   הקבצים נשמרים בצומת נפרד בענן כדי לא להכביד על שאר המידע.
+   ===================================================================== */
+const FILE_NODE = CLOUD.url + "/coparent-files-7q2x9";
+const FILE_CATS = ["חיסונים","בדיקות","מרשמים","סיכומי ביקור","גדילה ומשקל","אישורים/ביטוח","אחר"];
+const CAT_ICON = {"חיסונים":"💉","בדיקות":"🔬","מרשמים":"💊","סיכומי ביקור":"📋","גדילה ומשקל":"📏","אישורים/ביטוח":"🛡️","אחר":"📄"};
+
+function viewFiles(){
+  const k=CUR_KID;
+  const list=STATE.files.filter(f=>f.kid===k).sort((a,b)=>b.createdAt-a.createdAt);
+  let html=`<button class="add-btn" onclick="openFileForm()">＋ העלאת קובץ / מסמך</button>`;
+  html+=`<div class="tiny" style="text-align:center;margin:-6px 0 12px;color:var(--muted)">כל המידע הרפואי של ${KIDS[k].name} במקום אחד, מסווג לפי קטגוריה 🗂️</div>`;
+  if(!list.length) return html+`<div class="empty">אין קבצים עדיין.<br>העלו בדיקות, חיסונים, מרשמים ותשמרו אותם לתמיד.</div>`;
+  // קיבוץ לפי קטגוריה
+  FILE_CATS.forEach(cat=>{
+    const items=list.filter(f=>f.category===cat); if(!items.length) return;
+    html+=`<div class="section-title">${CAT_ICON[cat]} ${cat} (${items.length})</div><div class="card ${kidClass(k)}">`;
+    html+=items.map(f=>`<div class="item"><div class="row spread">
+        <div class="row" style="align-items:flex-start" onclick="openFile('${f.id}')" style="cursor:pointer">
+          <div class="ic" style="width:36px;height:36px;font-size:18px">${f.mime&&f.mime.startsWith('image')?'🖼️':'📄'}</div>
+          <div><h4 style="color:var(--brand-d)">${esc(f.title||f.filename)}</h4>
+            <div class="tiny">${f.date?fmtDate(f.date)+" · ":""}${esc(f.note||"")}${f.note?" · ":""}העלה/תה ${esc(f.createdBy)}</div></div>
+        </div>
+        <div class="row" style="gap:10px">
+          <button onclick="openFile('${f.id}')" class="tiny" style="color:var(--brand);font-weight:700">פתח</button>
+          <button onclick="delFile('${f.id}')" class="tiny" style="color:var(--danger)">מחק</button>
+        </div>
+      </div></div>`).join("")+`</div>`;
+  });
+  return html;
+}
+function openFileForm(){
+  editing=true;
+  sheet(`<h3>📁 העלאת מסמך · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>קטגוריה</label><select id="f-fcat">${FILE_CATS.map(c=>`<option>${c}</option>`).join("")}</select></div>
+    <div class="field"><label>כותרת / תיאור</label><input id="f-ftitle" placeholder="למשל: בדיקת דם ספירה, חיסון MMR…"></div>
+    <div class="field"><label>תאריך (רשות)</label><input type="date" id="f-fdate" value="${todayISO()}"></div>
+    <div class="field"><label>הערה (רשות)</label><input id="f-fnote" placeholder="פרטים נוספים"></div>
+    <div class="field"><label>הקובץ (תמונה או PDF)</label>
+      <input type="file" id="f-file" accept="image/*,application/pdf" onchange="fileChosen()"></div>
+    <div class="tiny" id="fileHint" style="color:var(--muted)">תמונות נדחסות אוטומטית לחיסכון במקום.</div>
+    <button class="save" id="fileSaveBtn" onclick="saveFile()">שמירה בענן</button>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+}
+function fileChosen(){
+  const f=document.getElementById("f-file").files[0];
+  const hint=document.getElementById("fileHint");
+  if(f) hint.textContent=`נבחר: ${f.name} (${(f.size/1024/1024).toFixed(1)}MB)`;
+}
+function readFileForUpload(file){
+  return new Promise((resolve,reject)=>{
+    if(file.type.startsWith("image/")){
+      const img=new Image(); const r=new FileReader();
+      r.onload=()=>{ img.onload=()=>{
+        const max=1500; let {width,height}=img;
+        if(width>max||height>max){ const s=max/Math.max(width,height); width=Math.round(width*s); height=Math.round(height*s); }
+        const c=document.createElement("canvas"); c.width=width; c.height=height;
+        c.getContext("2d").drawImage(img,0,0,width,height);
+        resolve({data:c.toDataURL("image/jpeg",0.72), mime:"image/jpeg"});
+      }; img.onerror=reject; img.src=r.result; };
+      r.onerror=reject; r.readAsDataURL(file);
+    } else {
+      const r=new FileReader();
+      r.onload=()=>resolve({data:r.result, mime:file.type||"application/octet-stream"});
+      r.onerror=reject; r.readAsDataURL(file);
+    }
+  });
+}
+async function saveFile(){
+  const inp=document.getElementById("f-file"); const file=inp.files[0];
+  if(!file){ alert("בחרו קובץ להעלאה"); return; }
+  const btn=document.getElementById("fileSaveBtn"); btn.textContent="מעלה…"; btn.disabled=true;
+  try{
+    const {data,mime}=await readFileForUpload(file);
+    if(data.length>6*1024*1024){ alert("הקובץ גדול מדי (מעל ~4MB). נסו תמונה או PDF קטן יותר."); btn.textContent="שמירה בענן"; btn.disabled=false; return; }
+    const id=uid();
+    const r=await fetch(FILE_NODE+"/"+id+".json",{method:"PUT",headers:{"Content-Type":"application/json"},body:JSON.stringify({data,mime})});
+    if(!r.ok) throw new Error("upload failed");
+    STATE.files.push({id,kid:CUR_KID,category:val("f-fcat"),title:val("f-ftitle").trim(),
+      filename:file.name,mime,date:val("f-fdate"),note:val("f-fnote").trim(),createdBy:ME,createdAt:Date.now()});
+    logActivity(`העלה/תה מסמך ל${KIDS[CUR_KID].name}: ${val("f-fcat")}${val("f-ftitle")?" · "+val("f-ftitle").trim():""}`,"📁");
+    closeSheet(); pushCloud(); render();
+  }catch(e){ alert("ההעלאה נכשלה, נסו שוב"); btn.textContent="שמירה בענן"; btn.disabled=false; }
+}
+function dataURLtoBlob(dataURL){
+  const [head,b64]=dataURL.split(","); const mime=(head.match(/:(.*?);/)||[])[1]||"application/octet-stream";
+  const bin=atob(b64); const arr=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++) arr[i]=bin.charCodeAt(i);
+  return new Blob([arr],{type:mime});
+}
+async function openFile(id){
+  try{
+    const r=await fetch(FILE_NODE+"/"+id+".json");
+    const o=await r.json();
+    if(!o||!o.data){ alert("הקובץ לא נמצא"); return; }
+    const url=URL.createObjectURL(dataURLtoBlob(o.data));
+    window.open(url,"_blank");
+    setTimeout(()=>URL.revokeObjectURL(url),60000);
+  }catch(e){ alert("שגיאה בפתיחת הקובץ"); }
+}
+async function delFile(id){
+  if(!confirm("למחוק את הקובץ לצמיתות?"))return;
+  STATE.files=STATE.files.filter(x=>x.id!==id);
+  try{ await fetch(FILE_NODE+"/"+id+".json",{method:"DELETE"}); }catch(e){}
+  pushCloud(); render();
+}
 
 /* =====================================================================
    מודל / טופס
