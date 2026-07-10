@@ -577,7 +577,7 @@ function viewHome(){
     sleep:{t:'stat',h:`<div class="stat" onclick="go('diary')" style="cursor:pointer"><div class="n" style="color:var(--brand)">${daySleep?daySleep.toFixed(1):"0"}<span style="font-size:13px"> ש׳</span></div><div class="l">שינה היום</div></div>`},
     meals:{t:'stat',h:`<div class="stat" onclick="go('diary')" style="cursor:pointer"><div class="n" style="color:var(--gold)">${dayMeals}</div><div class="l">ארוחות היום</div></div>`},
     settle:{t:'block',h:`<div class="settle" onclick="go('expenses')" style="cursor:pointer"><small>מאזן התחשבנות</small><div class="big">${settle.text}</div></div>`},
-    opensleep:{t:'block',h: openSleep?`<div class="wake-banner"><div>😴 <b>${KIDS[k].name}</b> נרדמה ב-${openSleep.start}${openSleep.date!==today?" ("+dayLabel(openSleep.date)+")":""} — עדיין ישנה</div><button class="save" style="margin-top:8px" onclick="wakeSleep('${openSleep.id}')">☀️ סמן יקיצה עכשיו (${nowHHMM()})</button></div>`:""},
+    opensleep:{t:'block',h: openSleep?`<div class="wake-banner"><div>😴 <b>${KIDS[k].name}</b> נרדמה ב-${openSleep.start}${openSleep.date!==today?" ("+dayLabel(openSleep.date)+")":""} — ישנה כבר <b>${elapsedLabel(openSleep)}</b></div><button class="save" style="margin-top:8px" onclick="wakeSleep('${openSleep.id}')">☀️ סמן יקיצה עכשיו (${nowHHMM()})</button></div>`:""},
     feed:{t:'block',h:feed}
   };
 
@@ -974,6 +974,16 @@ function sleepHours(e){
   let mins=(eh*60+em)-(sh*60+sm); if(mins<0) mins+=24*60;
   return mins/60;
 }
+/* כמה זמן עבר מאז שנרדמה (לשינה פתוחה) */
+function elapsedLabel(e){
+  try{
+    const startDt=new Date((e.date||todayISO())+"T"+(e.start||"00:00"));
+    let mins=Math.floor((Date.now()-startDt.getTime())/60000);
+    if(mins<0||isNaN(mins)) return "";
+    const h=Math.floor(mins/60), m=mins%60;
+    return h>0 ? `${h}:${String(m).padStart(2,"0")} ש׳` : `${m} דק׳`;
+  }catch(_){ return ""; }
+}
 /* תצוגה אחידה של רישום יומן (משמש גם ביומן וגם בלוח השנה) */
 function entryDisplay(e){
   let icon,title,sub=""; const note=e.note?esc(e.note):"";
@@ -1035,7 +1045,7 @@ function viewDiary(){
   const openSleep=STATE.diary.filter(e=>e.kid===k&&e.type==="sleep"&&!e.end&&e.outcome!=="tried").sort((a,b)=>b.createdAt-a.createdAt)[0];
   if(openSleep){
     html+=`<div class="wake-banner">
-      <div>😴 <b>${KIDS[k].name}</b> נרדמה ב-${openSleep.start}${openSleep.date!==todayISO()?" ("+dayLabel(openSleep.date)+")":""} — עדיין מסומנת ישנה</div>
+      <div>😴 <b>${KIDS[k].name}</b> נרדמה ב-${openSleep.start}${openSleep.date!==todayISO()?" ("+dayLabel(openSleep.date)+")":""} — ישנה כבר <b>${elapsedLabel(openSleep)}</b></div>
       <button class="save" style="margin-top:8px" onclick="wakeSleep('${openSleep.id}')">☀️ סמן יקיצה עכשיו (${nowHHMM()})</button>
     </div>`;
   }
