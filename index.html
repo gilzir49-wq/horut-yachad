@@ -1,0 +1,725 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#4f7a68">
+<title>הורות יחד · לביא ועמנואל</title>
+<style>
+/* ============================================================
+   הורות יחד — אפליקציית הורות משותפת (גל ורחל)
+   שלב 1 (MVP): משימות · קניות וחוסרים · הוצאות + דשבורד
+   כל הנתונים משותפים וחיים בין שני ההורים (Firebase).
+   ============================================================ */
+:root{
+  --bg:#f4f1ea; --card:#ffffff; --ink:#2c3330; --muted:#7c837e;
+  --line:#e7e2d6; --brand:#4f7a68; --brand-d:#3c5f51; --gold:#d9a441;
+  --lavi:#3b82f6; --lavi-soft:#e7f0ff;      /* לביא — כחול */
+  --ema:#c05fb0; --ema-soft:#fbeaf7;         /* עמנואל — ורוד/סגול */
+  --ok:#3f9d6d; --warn:#e0873b; --danger:#d15b56;
+  --shadow:0 2px 10px rgba(44,51,48,.07);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Rubik,Arial,sans-serif;
+  background:var(--bg); color:var(--ink); line-height:1.5;
+  max-width:560px; margin:0 auto; min-height:100vh; padding-bottom:90px;
+}
+h1,h2,h3,h4{margin:0}
+button{font-family:inherit; cursor:pointer; border:none; background:none; color:inherit}
+input,select,textarea{font-family:inherit; font-size:16px}
+
+/* ---------- Login ---------- */
+#login{
+  position:fixed; inset:0; background:linear-gradient(160deg,#4f7a68,#3c5f51);
+  display:flex; align-items:center; justify-content:center; padding:24px; z-index:100;
+}
+.login-card{
+  background:#fff; border-radius:22px; padding:30px 24px; width:100%; max-width:360px;
+  text-align:center; box-shadow:0 12px 40px rgba(0,0,0,.25);
+}
+.login-card .logo{font-size:44px}
+.login-card h1{font-size:22px; margin:8px 0 2px}
+.login-card p{color:var(--muted); font-size:14px; margin:0 0 20px}
+.who{display:flex; gap:12px; margin-bottom:16px}
+.who button{
+  flex:1; padding:16px 8px; border-radius:16px; border:2px solid var(--line);
+  background:#faf8f3; font-weight:700; font-size:16px; transition:.15s;
+}
+.who button .em{font-size:26px; display:block; margin-bottom:4px}
+.who button.sel{border-color:var(--brand); background:#eef4f1}
+#code{
+  width:100%; padding:14px; border-radius:14px; border:2px solid var(--line);
+  text-align:center; letter-spacing:3px; font-weight:700; margin-bottom:14px;
+}
+.login-card .go{
+  width:100%; padding:15px; border-radius:14px; background:var(--brand);
+  color:#fff; font-weight:800; font-size:17px;
+}
+.login-card .go:disabled{opacity:.5}
+.login-err{color:var(--danger); font-size:13px; min-height:18px; margin-top:8px}
+
+/* ---------- Header ---------- */
+header{
+  position:sticky; top:0; z-index:40; background:var(--bg);
+  padding:12px 16px 8px; border-bottom:1px solid var(--line);
+}
+.hrow{display:flex; align-items:center; justify-content:space-between}
+.htitle{font-size:18px; font-weight:800; display:flex; align-items:center; gap:7px}
+.htitle .dot{width:9px;height:9px;border-radius:50%;background:var(--ok)}
+.me{font-size:13px; color:var(--muted); display:flex; align-items:center; gap:8px}
+.me button{color:var(--brand); font-weight:700; font-size:13px}
+
+/* child tabs */
+.kids{display:flex; gap:10px; margin-top:12px}
+.kid{
+  flex:1; padding:11px; border-radius:14px; border:2px solid var(--line);
+  background:#fff; font-weight:800; font-size:16px; display:flex; align-items:center;
+  justify-content:center; gap:8px; transition:.15s;
+}
+.kid .av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;color:#fff}
+.kid.sel[data-k="lavi"]{border-color:var(--lavi); background:var(--lavi-soft)}
+.kid.sel[data-k="ema"]{border-color:var(--ema); background:var(--ema-soft)}
+
+/* ---------- Section nav ---------- */
+nav.sections{
+  display:flex; gap:6px; padding:12px 16px 4px; overflow-x:auto; -webkit-overflow-scrolling:touch;
+}
+nav.sections button{
+  white-space:nowrap; padding:8px 14px; border-radius:20px; background:#fff;
+  border:1px solid var(--line); font-weight:700; font-size:14px; color:var(--muted);
+}
+nav.sections button.sel{background:var(--brand); color:#fff; border-color:var(--brand)}
+
+main{padding:8px 16px}
+
+/* ---------- Cards & lists ---------- */
+.card{background:var(--card); border-radius:16px; padding:14px; box-shadow:var(--shadow); margin-bottom:12px}
+.card.k-lavi{border-inline-start:4px solid var(--lavi)}
+.card.k-ema{border-inline-start:4px solid var(--ema)}
+.row{display:flex; align-items:center; gap:10px}
+.spread{justify-content:space-between}
+.muted{color:var(--muted); font-size:13px}
+.tiny{font-size:12px; color:var(--muted)}
+.pill{display:inline-block; padding:2px 9px; border-radius:20px; font-size:12px; font-weight:700}
+.pill.p-high{background:#fbe4e2;color:#b23b36}
+.pill.p-mid{background:#fdefd9;color:#a86a1e}
+.pill.p-low{background:#e6f2ea;color:#2f7a52}
+.pill.done{background:#e6f2ea;color:#2f7a52}
+.pill.plan{background:#eee9dd;color:#7c6f4e}
+.pill.who{background:#eef2f6;color:#516074}
+.badge{font-size:11px;font-weight:800;padding:2px 8px;border-radius:8px}
+.badge.lavi{background:var(--lavi-soft);color:#1e56b3}
+.badge.ema{background:var(--ema-soft);color:#93357f}
+
+.item{border-bottom:1px solid var(--line); padding:12px 0}
+.item:last-child{border-bottom:none}
+.item h4{font-size:15.5px; font-weight:700}
+.item.checked h4{text-decoration:line-through; color:var(--muted)}
+.chk{
+  width:24px;height:24px;border-radius:8px;border:2px solid var(--line);
+  flex:0 0 auto; display:flex; align-items:center; justify-content:center; font-size:14px; color:#fff;
+}
+.chk.on{background:var(--ok); border-color:var(--ok)}
+
+.add-btn{
+  width:100%; padding:13px; border-radius:14px; background:#fff; border:1.5px dashed var(--brand);
+  color:var(--brand); font-weight:800; font-size:15px; margin-bottom:14px;
+}
+.section-title{font-size:15px; font-weight:800; margin:4px 2px 10px; color:var(--brand-d)}
+
+/* comments */
+.comments{margin-top:8px; padding-top:8px; border-top:1px dashed var(--line)}
+.cmt{font-size:13px; padding:4px 0}
+.cmt b{color:var(--brand-d)}
+.cmt-add{display:flex; gap:6px; margin-top:6px}
+.cmt-add input{flex:1; padding:7px 10px; border-radius:10px; border:1px solid var(--line)}
+.cmt-add button{padding:0 14px; border-radius:10px; background:var(--brand); color:#fff; font-weight:700}
+
+/* ---------- Dashboard ---------- */
+.stat-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px}
+.stat{background:#fff; border-radius:14px; padding:13px; box-shadow:var(--shadow)}
+.stat .n{font-size:22px; font-weight:800}
+.stat .l{font-size:12px; color:var(--muted)}
+.bar-row{margin:9px 0}
+.bar-row .lab{display:flex; justify-content:space-between; font-size:13px; margin-bottom:3px}
+.bar{height:9px; border-radius:6px; background:#eee7d9; overflow:hidden}
+.bar > i{display:block; height:100%; border-radius:6px}
+.settle{background:linear-gradient(135deg,#4f7a68,#3c5f51); color:#fff; border-radius:16px; padding:16px; margin-bottom:12px}
+.settle .big{font-size:20px; font-weight:800; margin-top:4px}
+.settle small{opacity:.85}
+
+/* ---------- Feed ---------- */
+.feed-item{display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); font-size:14px}
+.feed-item:last-child{border-bottom:none}
+.feed-item .ic{width:30px;height:30px;border-radius:50%;background:#eef4f1;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+
+/* ---------- Modal form ---------- */
+.overlay{position:fixed; inset:0; background:rgba(30,35,32,.5); z-index:60; display:none; align-items:flex-end; justify-content:center}
+.overlay.on{display:flex}
+.sheet{background:#fff; width:100%; max-width:560px; border-radius:22px 22px 0 0; padding:18px 18px 26px; max-height:90vh; overflow:auto; animation:up .2s ease}
+@keyframes up{from{transform:translateY(30px);opacity:.6}to{transform:none;opacity:1}}
+.sheet h3{font-size:18px; margin-bottom:14px}
+.field{margin-bottom:12px}
+.field label{display:block; font-size:13px; font-weight:700; margin-bottom:5px; color:var(--brand-d)}
+.field input,.field select,.field textarea{
+  width:100%; padding:12px; border-radius:12px; border:1.5px solid var(--line); background:#fbfaf6;
+}
+.field textarea{min-height:64px; resize:vertical}
+.seg{display:flex; gap:6px; flex-wrap:wrap}
+.seg button{flex:1; min-width:70px; padding:10px; border-radius:11px; border:1.5px solid var(--line); background:#fbfaf6; font-weight:700; font-size:14px}
+.seg button.on{border-color:var(--brand); background:#eef4f1; color:var(--brand-d)}
+.sheet .save{width:100%; padding:15px; border-radius:14px; background:var(--brand); color:#fff; font-weight:800; font-size:16px; margin-top:6px}
+.sheet .cancel{width:100%; padding:12px; text-align:center; color:var(--muted); font-weight:700; margin-top:4px}
+.empty{text-align:center; color:var(--muted); padding:30px 10px; font-size:14px}
+.export-btn{width:100%;padding:12px;border-radius:12px;background:#fff;border:1.5px solid var(--line);color:var(--brand-d);font-weight:700;margin-top:4px}
+.split-row{display:flex;align-items:center;gap:8px;font-size:14px}
+.split-row input{width:64px;text-align:center;padding:8px;border-radius:10px;border:1.5px solid var(--line)}
+</style>
+</head>
+<body>
+
+<!-- ============ LOGIN ============ -->
+<div id="login">
+  <div class="login-card">
+    <div class="logo">👨‍👩‍👧</div>
+    <h1>הורות יחד</h1>
+    <p>לביא ועמנואל · מקום אחד לשנינו</p>
+    <div class="who">
+      <button data-who="גל"><span class="em">👨</span>גל</button>
+      <button data-who="רחל"><span class="em">👩</span>רחל</button>
+    </div>
+    <input id="code" type="tel" inputmode="numeric" placeholder="קוד משפחתי" maxlength="8" autocomplete="off">
+    <button class="go" id="loginGo" disabled>כניסה</button>
+    <div class="login-err" id="loginErr"></div>
+  </div>
+</div>
+
+<!-- ============ APP ============ -->
+<div id="app" style="display:none">
+  <header>
+    <div class="hrow">
+      <div class="htitle"><span class="dot" id="syncDot"></span>הורות יחד</div>
+      <div class="me"><span id="meName"></span><button id="logout">יציאה</button></div>
+    </div>
+    <div class="kids">
+      <button class="kid sel" data-k="lavi"><span class="av" style="background:var(--lavi)">👦</span>לביא</button>
+      <button class="kid" data-k="ema"><span class="av" style="background:var(--ema)">👶</span>עמנואל</button>
+    </div>
+  </header>
+
+  <nav class="sections" id="nav"></nav>
+  <main id="main"></main>
+</div>
+
+<!-- ============ MODAL ============ -->
+<div class="overlay" id="overlay"><div class="sheet" id="sheet"></div></div>
+
+<script>
+/* =====================================================================
+   ⚙️  הגדרות — אפשר לערוך כאן בלבד
+   ===================================================================== */
+const CLOUD = {
+  url : "https://command-center-gal-default-rtdb.europe-west1.firebasedatabase.app",
+  node: "coparent-lavi-ema-7q2x9",   // כתובת סודית של הנתונים
+  code: "2409"                        // 🔑 הקוד המשפחתי לכניסה (אפשר לשנות)
+};
+const PARENTS = ["גל","רחל"];
+const KIDS = { lavi:{name:"לביא", emoji:"👦", color:"var(--lavi)"},
+               ema :{name:"עמנואל", emoji:"👶", color:"var(--ema)"} };
+const CATEGORIES = ["טיפולים","קניות","חינוך","חוגים","ביגוד","בריאות","אחר"];
+const CAT_COLORS = {"טיפולים":"#6a8fd8","קניות":"#d9a441","חינוך":"#7b9e5a","חוגים":"#c05fb0",
+  "ביגוד":"#5cae9e","בריאות":"#d15b56","אחר":"#9b9384"};
+
+/* =====================================================================
+   מצב האפליקציה — נתונים משותפים
+   ===================================================================== */
+let STATE = defaultState();
+let ME = null;              // ההורה המחובר
+let CUR_KID = "lavi";       // הילד הנבחר
+let CUR_SEC = "home";       // הלשונית הפע ילה
+let lastUpdated = 0;
+let editing = false;        // מונע דריסה תוך כדי מילוי טופס
+
+function defaultState(){
+  return {
+    tasks:[], shopping:[], expenses:[],
+    settings:{ splitGal:50 },   // אחוז שגל צריך לשאת; רחל = המשלים
+    activity:[],
+    updatedAt:0
+  };
+}
+
+/* =====================================================================
+   ענן — טעינה ושמירה
+   ===================================================================== */
+const DBURL = CLOUD.url + "/" + CLOUD.node + ".json";
+async function loadCloud(){
+  try{
+    const r = await fetch(DBURL + "?t=" + Date.now());
+    if(!r.ok) return null;
+    const o = await r.json();
+    if(o && o.json){ return { state:JSON.parse(o.json), updatedAt:o.updatedAt||0 }; }
+  }catch(e){ console.warn("load", e); }
+  return null;
+}
+async function pushCloud(){
+  STATE.updatedAt = Date.now();
+  lastUpdated = STATE.updatedAt;
+  setDot("#e0873b");
+  try{
+    await fetch(DBURL, {method:"PUT", headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({ json:JSON.stringify(STATE), updatedAt:STATE.updatedAt })});
+    setDot("var(--ok)");
+  }catch(e){ setDot("var(--danger)"); }
+}
+function setDot(c){ const d=document.getElementById("syncDot"); if(d) d.style.background=c; }
+
+async function syncPoll(){
+  if(editing) return;
+  const res = await loadCloud();
+  if(res && res.updatedAt > lastUpdated){
+    STATE = Object.assign(defaultState(), res.state);
+    lastUpdated = res.updatedAt;
+    render();
+  }
+}
+
+/* =====================================================================
+   כלי עזר
+   ===================================================================== */
+const uid = ()=> Date.now().toString(36)+Math.random().toString(36).slice(2,7);
+const nis = n => "₪"+ (Math.round(n*100)/100).toLocaleString("he-IL");
+function todayISO(){ return new Date().toISOString().slice(0,10); }
+function fmtDate(iso){ if(!iso) return ""; const d=new Date(iso+ (iso.length<=10?"T00:00":""));
+  return d.toLocaleDateString("he-IL",{day:"numeric",month:"short"}); }
+function timeAgo(ts){
+  const s=(Date.now()-ts)/1000;
+  if(s<60) return "עכשיו";
+  if(s<3600) return Math.floor(s/60)+" ד׳";
+  if(s<86400) return Math.floor(s/3600)+" ש׳";
+  return Math.floor(s/86400)+" ימים";
+}
+function logActivity(text, emoji){
+  STATE.activity.unshift({id:uid(), ts:Date.now(), who:ME, text, emoji:emoji||"•"});
+  STATE.activity = STATE.activity.slice(0,60);
+}
+function esc(s){ return (s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c])); }
+
+/* =====================================================================
+   התחברות
+   ===================================================================== */
+let pickWho=null;
+document.querySelectorAll(".who button").forEach(b=>{
+  b.onclick=()=>{ pickWho=b.dataset.who;
+    document.querySelectorAll(".who button").forEach(x=>x.classList.remove("sel"));
+    b.classList.add("sel"); checkLogin(); };
+});
+const codeInput=document.getElementById("code");
+codeInput.oninput=checkLogin;
+function checkLogin(){ document.getElementById("loginGo").disabled = !(pickWho && codeInput.value.length>=3); }
+document.getElementById("loginGo").onclick=doLogin;
+codeInput.addEventListener("keydown",e=>{ if(e.key==="Enter") doLogin(); });
+function doLogin(){
+  if(codeInput.value.trim()!==CLOUD.code){
+    document.getElementById("loginErr").textContent="קוד שגוי, נסו שוב";
+    codeInput.value=""; checkLogin(); return;
+  }
+  ME=pickWho;
+  localStorage.setItem("horut_me", ME);
+  startApp();
+}
+document.getElementById("logout").onclick=()=>{ localStorage.removeItem("horut_me"); location.reload(); };
+
+async function startApp(){
+  document.getElementById("login").style.display="none";
+  document.getElementById("app").style.display="block";
+  document.getElementById("meName").textContent="מחובר/ת: "+ME;
+  const res=await loadCloud();
+  if(res){ STATE=Object.assign(defaultState(),res.state); lastUpdated=res.updatedAt; }
+  else{ seedIfEmpty(); }
+  render();
+  setInterval(syncPoll, 8000);
+}
+
+/* דוגמת נתונים ראשונית (רק אם הענן ריק) */
+function seedIfEmpty(){
+  STATE.tasks=[
+    {id:uid(),kid:"lavi",title:"לתאם חיסון שנתי",desc:"טיפת חלב",owner:"שנינו",due:todayISO(),
+     priority:"mid",done:false,comments:[],createdBy:"גל",createdAt:Date.now()-8e6},
+    {id:uid(),kid:"ema",title:"לקנות מידה הבאה של בגדי גוף",desc:"",owner:"רחל",due:"",
+     priority:"low",done:false,comments:[],createdBy:"רחל",createdAt:Date.now()-3e6},
+  ];
+  STATE.shopping=[
+    {id:uid(),kid:"ema",name:"חיתולים מידה 3",qty:"2 חבילות",urgency:"high",where:"both",
+     bought:false,createdBy:"גל",createdAt:Date.now()-2e6},
+    {id:uid(),kid:"lavi",name:"קלמר לבית ספר",qty:"1",urgency:"mid",where:"dad",
+     bought:false,createdBy:"גל",createdAt:Date.now()-1e6},
+  ];
+  STATE.expenses=[
+    {id:uid(),kid:"ema",date:todayISO(),category:"בריאות",amount:180,paidBy:"רחל",note:"תרופות",createdBy:"רחל",createdAt:Date.now()-9e5},
+    {id:uid(),kid:"lavi",date:todayISO(),category:"חוגים",amount:320,paidBy:"גל",note:"חוג כדורגל",createdBy:"גל",createdAt:Date.now()-7e5},
+  ];
+  logActivity("נפתחה המערכת 🎉","🎉");
+  pushCloud();
+}
+
+/* =====================================================================
+   ניווט
+   ===================================================================== */
+const SECTIONS=[
+  {id:"home", label:"🏠 בית"},
+  {id:"tasks", label:"✅ משימות"},
+  {id:"shopping", label:"🛒 קניות"},
+  {id:"expenses", label:"💰 הוצאות"},
+];
+document.querySelectorAll(".kid").forEach(b=>{
+  b.onclick=()=>{ CUR_KID=b.dataset.k;
+    document.querySelectorAll(".kid").forEach(x=>x.classList.remove("sel"));
+    b.classList.add("sel"); render(); };
+});
+
+function render(){
+  // nav
+  const nav=document.getElementById("nav");
+  nav.innerHTML=SECTIONS.map(s=>`<button data-s="${s.id}" class="${s.id===CUR_SEC?'sel':''}">${s.label}</button>`).join("");
+  nav.querySelectorAll("button").forEach(b=> b.onclick=()=>{ CUR_SEC=b.dataset.s; render(); });
+  // main
+  const m=document.getElementById("main");
+  if(CUR_SEC==="home") m.innerHTML=viewHome();
+  else if(CUR_SEC==="tasks") m.innerHTML=viewTasks();
+  else if(CUR_SEC==="shopping") m.innerHTML=viewShopping();
+  else if(CUR_SEC==="expenses") m.innerHTML=viewExpenses();
+  bindMain();
+}
+const kidClass = k => k==="lavi"?"k-lavi":"k-ema";
+const kidBadge = k => `<span class="badge ${k}">${KIDS[k].emoji} ${KIDS[k].name}</span>`;
+
+/* =====================================================================
+   בית — פיד "מה חדש" + סיכום מהיר
+   ===================================================================== */
+function viewHome(){
+  const k=CUR_KID;
+  const openTasks=STATE.tasks.filter(t=>t.kid===k&&!t.done).length;
+  const needBuy=STATE.shopping.filter(s=>s.kid===k&&!s.bought).length;
+  const monthExp=STATE.expenses.filter(e=>e.kid===k&&sameMonth(e.date)).reduce((a,e)=>a+ +e.amount,0);
+  let html=`
+    <div class="stat-grid">
+      <div class="stat"><div class="n" style="color:var(--brand)">${openTasks}</div><div class="l">משימות פתוחות</div></div>
+      <div class="stat"><div class="n" style="color:var(--gold)">${needBuy}</div><div class="l">חוסרים לקנות</div></div>
+      <div class="stat"><div class="n">${nis(monthExp)}</div><div class="l">הוצאות החודש</div></div>
+      <div class="stat"><div class="n">${KIDS[k].emoji}</div><div class="l">מסך של ${KIDS[k].name}</div></div>
+    </div>`;
+  html+=`<div class="section-title">📣 מה חדש (שני הילדים)</div><div class="card">`;
+  if(!STATE.activity.length) html+=`<div class="empty">אין פעילות עדיין</div>`;
+  else html+=STATE.activity.slice(0,20).map(a=>`
+    <div class="feed-item">
+      <div class="ic">${a.emoji}</div>
+      <div><div>${esc(a.text)}</div><div class="tiny">${esc(a.who)} · ${timeAgo(a.ts)}</div></div>
+    </div>`).join("");
+  html+=`</div>`;
+  return html;
+}
+function sameMonth(iso){ if(!iso) return false; const d=new Date(iso); const n=new Date();
+  return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear(); }
+
+/* =====================================================================
+   משימות
+   ===================================================================== */
+function viewTasks(){
+  const k=CUR_KID;
+  const list=STATE.tasks.filter(t=>t.kid===k).sort((a,b)=> (a.done-b.done) || (b.createdAt-a.createdAt));
+  let html=`<button class="add-btn" onclick="openTaskForm()">＋ משימה חדשה</button>`;
+  if(!list.length) return html+`<div class="empty">אין משימות ל${KIDS[k].name}</div>`;
+  html+=list.map(t=>{
+    const pr={high:["p-high","דחוף"],mid:["p-mid","רגיל"],low:["p-low","נמוך"]}[t.priority]||["p-low",""];
+    return `<div class="card ${kidClass(k)} ${t.done?'':''}">
+      <div class="row spread">
+        <div class="row" style="align-items:flex-start">
+          <div class="chk ${t.done?'on':''}" onclick="toggleTask('${t.id}')">${t.done?'✓':''}</div>
+          <div class="item ${t.done?'checked':''}" style="border:none;padding:0">
+            <h4>${esc(t.title)}</h4>
+            ${t.desc?`<div class="muted">${esc(t.desc)}</div>`:""}
+            <div class="row" style="gap:6px;margin-top:6px;flex-wrap:wrap">
+              <span class="pill ${pr[0]}">${pr[1]}</span>
+              <span class="pill who">אחראי: ${esc(t.owner)}</span>
+              ${t.due?`<span class="pill plan">📅 ${fmtDate(t.due)}</span>`:""}
+            </div>
+            ${t.done?`<div class="tiny" style="margin-top:5px">בוצע ע״י ${esc(t.doneBy)} · ${timeAgo(t.doneAt)}</div>`:""}
+          </div>
+        </div>
+        <button onclick="delTask('${t.id}')" class="tiny" style="color:var(--danger)">מחק</button>
+      </div>
+      <div class="comments">
+        ${(t.comments||[]).map(c=>`<div class="cmt"><b>${esc(c.who)}:</b> ${esc(c.text)} <span class="tiny">· ${timeAgo(c.ts)}</span></div>`).join("")}
+        <div class="cmt-add">
+          <input placeholder="הוסף/י הערה…" id="cmt-${t.id}">
+          <button onclick="addComment('${t.id}')">שלח</button>
+        </div>
+      </div>
+    </div>`;
+  }).join("");
+  return html;
+}
+function openTaskForm(){
+  editing=true;
+  sheet(`<h3>משימה חדשה · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>כותרת</label><input id="f-title" placeholder="מה צריך לעשות?"></div>
+    <div class="field"><label>תיאור (רשות)</label><textarea id="f-desc"></textarea></div>
+    <div class="field"><label>אחראי</label>
+      <div class="seg" id="f-owner">
+        <button data-v="גל" class="on">גל</button><button data-v="רחל">רחל</button><button data-v="שנינו">שנינו</button>
+      </div></div>
+    <div class="field"><label>עדיפות</label>
+      <div class="seg" id="f-pri">
+        <button data-v="high">דחוף</button><button data-v="mid" class="on">רגיל</button><button data-v="low">נמוך</button>
+      </div></div>
+    <div class="field"><label>דדליין (רשות)</label><input type="date" id="f-due"></div>
+    <button class="save" onclick="saveTask()">שמירה</button>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+  segify();
+}
+function saveTask(){
+  const title=val("f-title").trim(); if(!title){ alert("צריך כותרת"); return; }
+  STATE.tasks.push({id:uid(),kid:CUR_KID,title,desc:val("f-desc").trim(),
+    owner:segVal("f-owner"),priority:segVal("f-pri"),due:val("f-due"),
+    done:false,comments:[],createdBy:ME,createdAt:Date.now()});
+  logActivity(`הוסיף/ה משימה ל${KIDS[CUR_KID].name}: ${title}`,"✅");
+  closeSheet(); pushCloud(); render();
+}
+function toggleTask(id){ const t=STATE.tasks.find(x=>x.id===id); if(!t)return;
+  t.done=!t.done; if(t.done){t.doneBy=ME;t.doneAt=Date.now(); logActivity(`סימן/ה כבוצע: ${t.title}`,"✔️");}
+  pushCloud(); render(); }
+function delTask(id){ if(!confirm("למחוק משימה?"))return;
+  STATE.tasks=STATE.tasks.filter(x=>x.id!==id); pushCloud(); render(); }
+function addComment(id){ const inp=document.getElementById("cmt-"+id); const txt=inp.value.trim(); if(!txt)return;
+  const t=STATE.tasks.find(x=>x.id===id); t.comments=t.comments||[];
+  t.comments.push({who:ME,text:txt,ts:Date.now()});
+  logActivity(`הגיב/ה על "${t.title}": ${txt}`,"💬");
+  pushCloud(); render(); }
+
+/* =====================================================================
+   קניות וחוסרים
+   ===================================================================== */
+const WHERE={dad:"אצל אבא",mom:"אצל אמא",both:"בשני הבתים"};
+function viewShopping(){
+  const k=CUR_KID;
+  const open=STATE.shopping.filter(s=>s.kid===k&&!s.bought).sort((a,b)=>urg(b)-urg(a));
+  const bought=STATE.shopping.filter(s=>s.kid===k&&s.bought).sort((a,b)=>b.boughtAt-a.boughtAt);
+  let html=`<button class="add-btn" onclick="openShopForm()">＋ הוספת חוסר</button>`;
+  html+=`<div class="section-title">חסר עכשיו (${open.length})</div>`;
+  if(!open.length) html+=`<div class="empty">אין חוסרים 🎉</div>`;
+  else html+=`<div class="card ${kidClass(k)}">`+open.map(s=>{
+    const u={high:["p-high","דחוף"],mid:["p-mid","רגיל"],low:["p-low","כשאפשר"]}[s.urgency]||["p-low",""];
+    return `<div class="item">
+      <div class="row spread">
+        <div class="row"><div class="chk" onclick="buyItem('${s.id}')" title="סמן כנקנה"></div>
+          <div><h4>${esc(s.name)}</h4>
+          <div class="row" style="gap:6px;margin-top:4px;flex-wrap:wrap">
+            ${s.qty?`<span class="pill plan">×${esc(s.qty)}</span>`:""}
+            <span class="pill ${u[0]}">${u[1]}</span>
+            <span class="pill who">${WHERE[s.where]||""}</span>
+          </div></div>
+        </div>
+        <button onclick="delShop('${s.id}')" class="tiny" style="color:var(--danger)">מחק</button>
+      </div></div>`;
+  }).join("")+`</div>`;
+  if(bought.length){
+    html+=`<div class="section-title">נקנה לאחרונה</div><div class="card">`+
+      bought.slice(0,10).map(s=>`<div class="item checked">
+        <div class="row spread"><div><h4>${esc(s.name)}</h4>
+          <div class="tiny">קנה/תה ${esc(s.boughtBy)} · ${s.cost?nis(s.cost):"—"} · ${timeAgo(s.boughtAt)}</div></div>
+          <span class="chk on">✓</span></div></div>`).join("")+`</div>`;
+  }
+  return html;
+}
+const urg=s=>({high:3,mid:2,low:1}[s.urgency]||0);
+function openShopForm(){
+  editing=true;
+  sheet(`<h3>מה חסר? · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>הפריט</label><input id="f-name" placeholder="חיתולים / מזון / בגדים…"></div>
+    <div class="field"><label>כמות (רשות)</label><input id="f-qty" placeholder="2 חבילות"></div>
+    <div class="field"><label>דחיפות</label>
+      <div class="seg" id="f-urg"><button data-v="high">דחוף</button><button data-v="mid" class="on">רגיל</button><button data-v="low">כשאפשר</button></div></div>
+    <div class="field"><label>באיזה בית חסר</label>
+      <div class="seg" id="f-where"><button data-v="dad">אצל אבא</button><button data-v="mom">אצל אמא</button><button data-v="both" class="on">בשניהם</button></div></div>
+    <button class="save" onclick="saveShop()">הוספה</button>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+  segify();
+}
+function saveShop(){
+  const name=val("f-name").trim(); if(!name){alert("צריך שם פריט");return;}
+  STATE.shopping.push({id:uid(),kid:CUR_KID,name,qty:val("f-qty").trim(),
+    urgency:segVal("f-urg"),where:segVal("f-where"),bought:false,createdBy:ME,createdAt:Date.now()});
+  logActivity(`הוסיף/ה חוסר ל${KIDS[CUR_KID].name}: ${name}`,"🛒");
+  closeSheet(); pushCloud(); render();
+}
+function buyItem(id){
+  const s=STATE.shopping.find(x=>x.id===id); if(!s)return;
+  editing=true;
+  sheet(`<h3>נקנה: ${esc(s.name)}</h3>
+    <div class="field"><label>כמה עלה? (₪)</label><input type="number" inputmode="decimal" id="f-cost" placeholder="0"></div>
+    <div class="field"><label>קטגוריה להוצאה</label>
+      <select id="f-cat">${CATEGORIES.map(c=>`<option ${c==="קניות"?"selected":""}>${c}</option>`).join("")}</select></div>
+    <div class="field"><label>מי שילם</label>
+      <div class="seg" id="f-paid"><button data-v="גל" class="${ME==="גל"?"on":""}">גל</button><button data-v="רחל" class="${ME==="רחל"?"on":""}">רחל</button></div></div>
+    <button class="save" onclick="confirmBuy('${id}')">שמור והעבר להוצאה</button>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+  segify();
+}
+function confirmBuy(id){
+  const s=STATE.shopping.find(x=>x.id===id); if(!s)return;
+  const cost=+val("f-cost")||0;
+  s.bought=true; s.boughtBy=ME; s.boughtAt=Date.now(); s.cost=cost;
+  if(cost>0){
+    STATE.expenses.push({id:uid(),kid:s.kid,date:todayISO(),category:val("f-cat"),
+      amount:cost,paidBy:segVal("f-paid"),note:"קנייה: "+s.name,createdBy:ME,createdAt:Date.now()});
+  }
+  logActivity(`קנה/תה "${s.name}"${cost?" · "+nis(cost):""}`,"🛍️");
+  closeSheet(); pushCloud(); render();
+}
+function delShop(id){ if(!confirm("למחוק פריט?"))return; STATE.shopping=STATE.shopping.filter(x=>x.id!==id); pushCloud(); render(); }
+
+/* =====================================================================
+   הוצאות + דשבורד + מאזן התחשבנות
+   ===================================================================== */
+function viewExpenses(){
+  const k=CUR_KID;
+  const all=STATE.expenses.filter(e=>e.kid===k);
+  const month=all.filter(e=>sameMonth(e.date));
+  const totalM=month.reduce((a,e)=>a+ +e.amount,0);
+  const totalY=all.reduce((a,e)=>a+ +e.amount,0);
+  // per parent (all children, for real settlement)
+  const settle=computeSettle();
+  let html=`<button class="add-btn" onclick="openExpForm()">＋ הוצאה חדשה</button>`;
+
+  // מאזן התחשבנות (כולל שני הילדים)
+  html+=`<div class="settle">
+    <small>מאזן התחשבנות כולל (שני הילדים) · חלוקה ${STATE.settings.splitGal}/${100-STATE.settings.splitGal}</small>
+    <div class="big">${settle.text}</div>
+    <div style="margin-top:8px;font-size:13px;opacity:.9">
+      גל שילם ${nis(settle.paidGal)} · רחל שילמה ${nis(settle.paidRachel)}<br>
+      סה״כ הוצאות: ${nis(settle.total)}
+    </div>
+    <button class="export-btn" style="margin-top:10px;background:rgba(255,255,255,.15);border-color:transparent;color:#fff" onclick="openSplit()">⚙️ שינוי יחס חלוקה</button>
+  </div>`;
+
+  // סטטיסטיקה של הילד הנבחר
+  html+=`<div class="stat-grid">
+    <div class="stat"><div class="n">${nis(totalM)}</div><div class="l">${KIDS[k].name} · החודש</div></div>
+    <div class="stat"><div class="n">${nis(totalY)}</div><div class="l">${KIDS[k].name} · השנה</div></div>
+  </div>`;
+
+  // פילוח לפי קטגוריה (הילד הנבחר, החודש)
+  const byCat={};
+  month.forEach(e=> byCat[e.category]=(byCat[e.category]||0)+ +e.amount);
+  const maxCat=Math.max(1,...Object.values(byCat));
+  if(Object.keys(byCat).length){
+    html+=`<div class="card"><div class="section-title" style="margin-top:0">פילוח לפי קטגוריה · החודש</div>`;
+    html+=Object.entries(byCat).sort((a,b)=>b[1]-a[1]).map(([c,v])=>`
+      <div class="bar-row"><div class="lab"><span>${c}</span><b>${nis(v)}</b></div>
+      <div class="bar"><i style="width:${v/maxCat*100}%;background:${CAT_COLORS[c]||'#999'}"></i></div></div>`).join("");
+    html+=`</div>`;
+  }
+
+  // רשימת הוצאות
+  html+=`<div class="section-title">הוצאות ${KIDS[k].name}</div>`;
+  if(!all.length) html+=`<div class="empty">אין הוצאות עדיין</div>`;
+  else{
+    html+=`<div class="card ${kidClass(k)}">`+ all.sort((a,b)=>b.createdAt-a.createdAt).map(e=>`
+      <div class="item"><div class="row spread">
+        <div><h4>${nis(e.amount)} · ${esc(e.category)}</h4>
+          <div class="tiny">${esc(e.note||"")}${e.note?" · ":""}שילם/ה ${esc(e.paidBy)} · ${fmtDate(e.date)}</div></div>
+        <button onclick="delExp('${e.id}')" class="tiny" style="color:var(--danger)">מחק</button>
+      </div></div>`).join("")+`</div>`;
+    html+=`<button class="export-btn" onclick="exportCSV()">⬇️ ייצוא הוצאות ל-CSV (Excel)</button>`;
+  }
+  return html;
+}
+function computeSettle(){
+  const exps=STATE.expenses;
+  const total=exps.reduce((a,e)=>a+ +e.amount,0);
+  const paidGal=exps.filter(e=>e.paidBy==="גל").reduce((a,e)=>a+ +e.amount,0);
+  const paidRachel=exps.filter(e=>e.paidBy==="רחל").reduce((a,e)=>a+ +e.amount,0);
+  const shareGal=total*STATE.settings.splitGal/100;   // כמה גל אמור לשאת
+  const galBalance=paidGal-shareGal;                   // חיובי = גל שילם יותר מחלקו
+  let text;
+  if(Math.abs(galBalance)<1) text="מאוזן ✓";
+  else if(galBalance>0) text=`רחל חייבת לגל ${nis(galBalance)}`;
+  else text=`גל חייב לרחל ${nis(-galBalance)}`;
+  return {total,paidGal,paidRachel,text};
+}
+function openExpForm(){
+  editing=true;
+  sheet(`<h3>הוצאה חדשה · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>סכום (₪)</label><input type="number" inputmode="decimal" id="f-amt" placeholder="0"></div>
+    <div class="field"><label>קטגוריה</label><select id="f-cat">${CATEGORIES.map(c=>`<option>${c}</option>`).join("")}</select></div>
+    <div class="field"><label>מי שילם</label>
+      <div class="seg" id="f-paid"><button data-v="גל" class="${ME==="גל"?"on":""}">גל</button><button data-v="רחל" class="${ME==="רחל"?"on":""}">רחל</button></div></div>
+    <div class="field"><label>תאריך</label><input type="date" id="f-date" value="${todayISO()}"></div>
+    <div class="field"><label>הערה (רשות)</label><input id="f-note" placeholder="על מה ההוצאה"></div>
+    <button class="save" onclick="saveExp()">שמירה</button>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+  segify();
+}
+function saveExp(){
+  const amt=+val("f-amt"); if(!amt||amt<=0){alert("צריך סכום");return;}
+  STATE.expenses.push({id:uid(),kid:CUR_KID,date:val("f-date")||todayISO(),category:val("f-cat"),
+    amount:amt,paidBy:segVal("f-paid"),note:val("f-note").trim(),createdBy:ME,createdAt:Date.now()});
+  logActivity(`רשם/ה הוצאה ל${KIDS[CUR_KID].name}: ${nis(amt)} (${val("f-cat")})`,"💰");
+  closeSheet(); pushCloud(); render();
+}
+function delExp(id){ if(!confirm("למחוק הוצאה?"))return; STATE.expenses=STATE.expenses.filter(x=>x.id!==id); pushCloud(); render(); }
+function openSplit(){
+  editing=true;
+  sheet(`<h3>יחס חלוקת הוצאות</h3>
+    <p class="muted">כמה אחוז מכלל ההוצאות כל הורה נושא. ברירת מחדל 50/50.</p>
+    <div class="split-row" style="margin:14px 0">
+      <span>גל</span><input type="number" id="f-split" min="0" max="100" value="${STATE.settings.splitGal}"><span>%</span>
+      <span style="margin-inline-start:auto">רחל</span><b id="rachelPct">${100-STATE.settings.splitGal}%</b>
+    </div>
+    <button class="save" onclick="saveSplit()">שמירה</button>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+  const inp=document.getElementById("f-split");
+  inp.oninput=()=>{ let v=Math.max(0,Math.min(100,+inp.value||0)); document.getElementById("rachelPct").textContent=(100-v)+"%"; };
+}
+function saveSplit(){ let v=Math.max(0,Math.min(100,+val("f-split")||50)); STATE.settings.splitGal=v;
+  logActivity(`עדכן/ה יחס חלוקה ל-${v}/${100-v}`,"⚙️"); closeSheet(); pushCloud(); render(); }
+function exportCSV(){
+  const rows=[["ילד","תאריך","קטגוריה","סכום","שילם","הערה"]];
+  STATE.expenses.forEach(e=>rows.push([KIDS[e.kid].name,e.date,e.category,e.amount,e.paidBy,(e.note||"").replace(/,/g," ")]));
+  const csv="﻿"+rows.map(r=>r.join(",")).join("\n");
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
+  a.download="הוצאות-הורות-יחד.csv"; a.click();
+}
+
+/* =====================================================================
+   מודל / טופס
+   ===================================================================== */
+const overlay=document.getElementById("overlay");
+function sheet(html){ document.getElementById("sheet").innerHTML=html; overlay.classList.add("on"); }
+function closeSheet(){ overlay.classList.remove("on"); editing=false; }
+overlay.addEventListener("click",e=>{ if(e.target===overlay) closeSheet(); });
+function segify(){
+  document.querySelectorAll(".seg").forEach(seg=>{
+    seg.querySelectorAll("button").forEach(b=> b.onclick=()=>{
+      seg.querySelectorAll("button").forEach(x=>x.classList.remove("on")); b.classList.add("on");
+    });
+  });
+}
+function segVal(id){ const el=document.querySelector("#"+id+" .on"); return el?el.dataset.v:""; }
+function val(id){ const el=document.getElementById(id); return el?el.value:""; }
+function bindMain(){ /* placeholder for future bindings */ }
+
+/* =====================================================================
+   הפעלה
+   ===================================================================== */
+(function init(){
+  const saved=localStorage.getItem("horut_me");
+  if(saved && PARENTS.includes(saved)){ ME=saved; startApp(); }
+})();
+</script>
+</body>
+</html>
