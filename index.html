@@ -238,13 +238,14 @@ const CAT_COLORS = {"טיפולים":"#6a8fd8","קניות":"#d9a441","חינו�
 let STATE = defaultState();
 let ME = null;              // ההורה המחובר
 let CUR_KID = "lavi";       // הילד הנבחר
-let CUR_SEC = "home";       // הלשונית הפע ילה
+let CUR_SEC = "home";       // הלשונית הפעילה
+let CUR_DIARY_DATE = null;  // תאריך היומן המוצג (null = היום)
 let lastUpdated = 0;
 let editing = false;        // מונע דריסה תוך כדי מילוי טופס
 
 function defaultState(){
   return {
-    tasks:[], shopping:[], expenses:[],
+    tasks:[], shopping:[], expenses:[], diary:[],
     settings:{ splitGal:50 },   // אחוז שגל צריך לשאת; רחל = המשלים
     activity:[],
     updatedAt:0
@@ -361,6 +362,14 @@ function seedIfEmpty(){
     {id:uid(),kid:"ema",date:todayISO(),category:"בריאות",amount:180,paidBy:"רחל",note:"תרופות",createdBy:"רחל",createdAt:Date.now()-9e5},
     {id:uid(),kid:"lavi",date:todayISO(),category:"חוגים",amount:320,paidBy:"גל",note:"חוג כדורגל",createdBy:"גל",createdAt:Date.now()-7e5},
   ];
+  const t=todayISO(), y=new Date(Date.now()-864e5).toISOString().slice(0,10);
+  STATE.diary=[
+    {id:uid(),kid:"ema",date:t,type:"meal",meal:"בוקר",what:"דייסת אורז",amount:"חצי מנה",time:"08:15",createdBy:"רחל",createdAt:Date.now()},
+    {id:uid(),kid:"ema",date:t,type:"sleep",start:"12:30",end:"14:00",isNap:true,quality:"טובה",time:"12:30",createdBy:"רחל",createdAt:Date.now()},
+    {id:uid(),kid:"ema",date:t,type:"health",mood:"😊 שמח/ה",temp:"",meds:"",diaper:"החלפה",note:"מצב רוח מעולה",time:"10:00",createdBy:"רחל",createdAt:Date.now()},
+    {id:uid(),kid:"ema",date:y,type:"sleep",start:"20:00",end:"06:30",isNap:false,quality:"טובה",time:"20:00",createdBy:"גל",createdAt:Date.now()},
+    {id:uid(),kid:"ema",date:y,type:"meal",meal:"ערב",what:"בקבוק",amount:"150 מ״ל",time:"19:00",createdBy:"גל",createdAt:Date.now()},
+  ];
   logActivity("נפתחה המערכת 🎉","🎉");
   pushCloud();
 }
@@ -370,6 +379,7 @@ function seedIfEmpty(){
    ===================================================================== */
 const SECTIONS=[
   {id:"home", label:"🏠 בית"},
+  {id:"diary", label:"📔 יומן"},
   {id:"tasks", label:"✅ משימות"},
   {id:"shopping", label:"🛒 קניות"},
   {id:"expenses", label:"💰 הוצאות"},
@@ -388,6 +398,7 @@ function render(){
   // main
   const m=document.getElementById("main");
   if(CUR_SEC==="home") m.innerHTML=viewHome();
+  else if(CUR_SEC==="diary") m.innerHTML=viewDiary();
   else if(CUR_SEC==="tasks") m.innerHTML=viewTasks();
   else if(CUR_SEC==="shopping") m.innerHTML=viewShopping();
   else if(CUR_SEC==="expenses") m.innerHTML=viewExpenses();
@@ -694,6 +705,175 @@ function exportCSV(){
   a.href=URL.createObjectURL(new Blob([csv],{type:"text/csv"}));
   a.download="הוצאות-הורות-יחד.csv"; a.click();
 }
+
+/* =====================================================================
+   יומן יומי (אוכל · שינה · מצב רוח/בריאות) — לעמנואל וללביא
+   ===================================================================== */
+const MEALS=["בוקר","צהריים","ערב","ביניים"];
+const MOODS=[["😊","שמח/ה"],["😐","רגיל"],["😢","בכיין/ית"],["😴","עייף/ה"],["🤒","לא מרגיש/ה טוב"]];
+function curDiaryDate(){ return CUR_DIARY_DATE || todayISO(); }
+function shiftDiary(days){
+  const d=new Date(curDiaryDate()+"T00:00"); d.setDate(d.getDate()+days);
+  const iso=d.toISOString().slice(0,10);
+  CUR_DIARY_DATE = (iso===todayISO()) ? null : iso;
+  render();
+}
+function dayLabel(iso){
+  const d=new Date(iso+"T00:00"), t=todayISO();
+  const yest=new Date(); yest.setDate(yest.getDate()-1);
+  if(iso===t) return "היום";
+  if(iso===yest.toISOString().slice(0,10)) return "אתמול";
+  return d.toLocaleDateString("he-IL",{weekday:"long",day:"numeric",month:"long"});
+}
+function sleepHours(e){
+  if(e.type!=="sleep"||!e.start||!e.end) return 0;
+  const [sh,sm]=e.start.split(":").map(Number), [eh,em]=e.end.split(":").map(Number);
+  let mins=(eh*60+em)-(sh*60+sm); if(mins<0) mins+=24*60;
+  return mins/60;
+}
+function viewDiary(){
+  const k=CUR_KID, date=curDiaryDate();
+  const isBaby = k==="ema";
+  const entries=STATE.diary.filter(e=>e.kid===k&&e.date===date).sort((a,b)=>(a.time||"").localeCompare(b.time||""));
+  const daySleep=entries.filter(e=>e.type==="sleep").reduce((a,e)=>a+sleepHours(e),0);
+  const dayMeals=entries.filter(e=>e.type==="meal").length;
+
+  let html=`
+    <div class="card ${kidClass(k)}" style="padding:10px 12px">
+      <div class="row spread">
+        <button onclick="shiftDiary(-1)" style="font-size:20px;color:var(--brand);padding:4px 10px">›</button>
+        <div style="text-align:center"><b>${dayLabel(date)}</b><div class="tiny">יומן ${KIDS[k].name}</div></div>
+        <button onclick="shiftDiary(1)" ${date>=todayISO()?'disabled style="opacity:.3;padding:4px 10px;font-size:20px"':'style="font-size:20px;color:var(--brand);padding:4px 10px"'}>‹</button>
+      </div>
+    </div>`;
+
+  // כפתורי הוספה מהירים
+  html+=`<div class="seg" style="margin-bottom:12px">
+      <button onclick="openMealForm()" style="background:#fff;border:1.5px solid var(--line)">🍽️ אוכל</button>
+      <button onclick="openSleepForm()" style="background:#fff;border:1.5px solid var(--line)">😴 שינה</button>
+      <button onclick="openHealthForm()" style="background:#fff;border:1.5px solid var(--line)">😊 מצב רוח</button>
+    </div>`;
+
+  // סיכום היום
+  html+=`<div class="stat-grid">
+    <div class="stat"><div class="n" style="color:var(--brand)">${daySleep?daySleep.toFixed(1):"0"}<span style="font-size:13px"> ש׳</span></div><div class="l">שינה היום</div></div>
+    <div class="stat"><div class="n" style="color:var(--gold)">${dayMeals}</div><div class="l">ארוחות היום</div></div>
+  </div>`;
+
+  // ציר זמן
+  html+=`<div class="section-title">ציר זמן</div>`;
+  if(!entries.length) html+=`<div class="empty">אין רישומים ליום הזה.<br>הוסיפו אוכל / שינה / מצב רוח ☝️</div>`;
+  else html+=`<div class="card">`+entries.map(e=>{
+    let icon,title,sub="";
+    if(e.type==="meal"){ icon="🍽️"; title=`${e.meal} — ${esc(e.what||"")}`; sub=e.amount?("כמות: "+esc(e.amount)):""; }
+    else if(e.type==="sleep"){ icon="😴"; const h=sleepHours(e); title=`שינה${e.isNap?" (צהריים)":""} ${e.start}–${e.end}`; sub=`${h.toFixed(1)} שעות${e.quality?" · "+esc(e.quality):""}`; }
+    else { icon=e.mood?e.mood.split(" ")[0]:"😊"; title=e.mood?esc(e.mood):"מצב רוח";
+      const parts=[]; if(e.temp)parts.push("🌡️ "+esc(e.temp)+"°"); if(e.meds)parts.push("💊 "+esc(e.meds));
+      if(e.diaper)parts.push("🧷 "+esc(e.diaper)); if(e.school)parts.push("🏫 "+esc(e.school)); if(e.note)parts.push(esc(e.note));
+      sub=parts.join(" · "); }
+    return `<div class="item"><div class="row spread">
+      <div class="row" style="align-items:flex-start">
+        <div class="ic" style="width:34px;height:34px;font-size:17px">${icon}</div>
+        <div><h4>${title}</h4>${sub?`<div class="muted">${sub}</div>`:""}
+          <div class="tiny">${e.time||""} · ${esc(e.createdBy)}</div></div>
+      </div>
+      <button onclick="delDiary('${e.id}')" class="tiny" style="color:var(--danger)">מחק</button>
+    </div></div>`;
+  }).join("")+`</div>`;
+
+  // מגמות שבועיות
+  html+=weeklyTrends(k);
+  return html;
+}
+function weeklyTrends(k){
+  const days=[]; const base=new Date(curDiaryDate()+"T00:00");
+  for(let i=6;i>=0;i--){ const d=new Date(base); d.setDate(d.getDate()-i); days.push(d.toISOString().slice(0,10)); }
+  const sleepBy={}, mealsBy={};
+  days.forEach(dt=>{ const es=STATE.diary.filter(e=>e.kid===k&&e.date===dt);
+    sleepBy[dt]=es.filter(e=>e.type==="sleep").reduce((a,e)=>a+sleepHours(e),0);
+    mealsBy[dt]=es.filter(e=>e.type==="meal").length; });
+  const maxS=Math.max(1,...Object.values(sleepBy)), maxM=Math.max(1,...Object.values(mealsBy));
+  const dow=dt=>new Date(dt+"T00:00").toLocaleDateString("he-IL",{weekday:"narrow"});
+  const barsChart=(by,max,col,unit)=>`<div class="row" style="align-items:flex-end;gap:6px;height:90px;margin-top:6px">`+
+    days.map(dt=>`<div style="flex:1;text-align:center">
+      <div style="height:70px;display:flex;align-items:flex-end"><div style="width:100%;border-radius:6px 6px 0 0;background:${col};height:${Math.max(3,(by[dt]/max)*70)}px" title="${by[dt]}"></div></div>
+      <div class="tiny" style="margin-top:3px">${by[dt]?(unit==='h'?by[dt].toFixed(1):by[dt]):''}</div>
+      <div class="tiny">${dow(dt)}</div>
+    </div>`).join("")+`</div>`;
+  return `<div class="section-title">מגמות שבוע</div>
+    <div class="card"><div class="tiny" style="font-weight:700;color:var(--brand-d)">😴 שעות שינה ליום</div>
+      ${barsChart(sleepBy,maxS,"var(--"+(k==="ema"?"ema":"lavi")+")","h")}</div>
+    <div class="card"><div class="tiny" style="font-weight:700;color:var(--brand-d)">🍽️ מספר ארוחות ליום</div>
+      ${barsChart(mealsBy,maxM,"var(--gold)","n")}</div>`;
+}
+function nowHHMM(){ const d=new Date(); return d.toTimeString().slice(0,5); }
+function openMealForm(){
+  editing=true;
+  sheet(`<h3>🍽️ ארוחה · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>איזו ארוחה</label>
+      <div class="seg" id="f-meal">${MEALS.map((m,i)=>`<button data-v="${m}" class="${i===0?'on':''}">${m}</button>`).join("")}</div></div>
+    <div class="field"><label>מה אכל/ה</label><input id="f-what" placeholder="דייסה / פירה / בקבוק…"></div>
+    <div class="field"><label>כמה (רשות)</label><input id="f-amount" placeholder="120 מ״ל / חצי מנה / הכל"></div>
+    <div class="field"><label>שעה</label><input type="time" id="f-time" value="${nowHHMM()}"></div>
+    <button class="save" onclick="saveMeal()">שמירה</button>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+  segify();
+}
+function saveMeal(){
+  const what=val("f-what").trim();
+  STATE.diary.push({id:uid(),kid:CUR_KID,date:curDiaryDate(),type:"meal",
+    meal:segVal("f-meal"),what,amount:val("f-amount").trim(),time:val("f-time"),
+    createdBy:ME,createdAt:Date.now()});
+  logActivity(`רשם/ה ל${KIDS[CUR_KID].name} ארוחת ${segVal("f-meal")}${what?": "+what:""}`,"🍽️");
+  closeSheet(); pushCloud(); render();
+}
+function openSleepForm(){
+  editing=true;
+  sheet(`<h3>😴 שינה · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>סוג</label>
+      <div class="seg" id="f-nap"><button data-v="night" class="on">שנת לילה</button><button data-v="nap">שנת צהריים</button></div></div>
+    <div class="field"><label>נרדם/ה בשעה</label><input type="time" id="f-start" value="${nowHHMM()}"></div>
+    <div class="field"><label>התעורר/ה בשעה</label><input type="time" id="f-end" value="${nowHHMM()}"></div>
+    <div class="field"><label>איכות שינה</label>
+      <div class="seg" id="f-qual"><button data-v="טובה" class="on">טובה</button><button data-v="בינונית">בינונית</button><button data-v="קטועה">קטועה</button></div></div>
+    <button class="save" onclick="saveSleep()">שמירה</button>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+  segify();
+}
+function saveSleep(){
+  STATE.diary.push({id:uid(),kid:CUR_KID,date:curDiaryDate(),type:"sleep",
+    start:val("f-start"),end:val("f-end"),isNap:segVal("f-nap")==="nap",quality:segVal("f-qual"),
+    time:val("f-start"),createdBy:ME,createdAt:Date.now()});
+  logActivity(`רשם/ה שינה ל${KIDS[CUR_KID].name}`,"😴");
+  closeSheet(); pushCloud(); render();
+}
+function openHealthForm(){
+  editing=true;
+  const isBaby=CUR_KID==="ema";
+  sheet(`<h3>😊 מצב רוח ובריאות · ${KIDS[CUR_KID].name}</h3>
+    <div class="field"><label>מצב רוח</label>
+      <div class="seg" id="f-mood" style="flex-wrap:wrap">${MOODS.map((m,i)=>`<button data-v="${m[0]} ${m[1]}" class="${i===0?'on':''}">${m[0]}</button>`).join("")}</div></div>
+    <div class="field"><label>חום (רשות)</label><input id="f-temp" inputmode="decimal" placeholder="36.8"></div>
+    <div class="field"><label>תרופות (רשות)</label><input id="f-meds" placeholder="אקמול / טיפות…"></div>
+    ${isBaby
+      ? `<div class="field"><label>חיתולים / עשיית צרכים (רשות)</label><input id="f-diaper" placeholder="החלפה / קקי / רטוב"></div>`
+      : `<div class="field"><label>בית ספר / גן (רשות)</label><input id="f-school" placeholder="איך היה היום בגן/בי״ס"></div>`}
+    <div class="field"><label>הערה חופשית</label><textarea id="f-note" placeholder="כל דבר שכדאי שההורה השני ידע"></textarea></div>
+    <div class="field"><label>שעה</label><input type="time" id="f-time" value="${nowHHMM()}"></div>
+    <button class="save" onclick="saveHealth(${isBaby})">שמירה</button>
+    <div class="cancel" onclick="closeSheet()">ביטול</div>`);
+  segify();
+}
+function saveHealth(isBaby){
+  const e={id:uid(),kid:CUR_KID,date:curDiaryDate(),type:"health",
+    mood:segVal("f-mood"),temp:val("f-temp").trim(),meds:val("f-meds").trim(),
+    note:val("f-note").trim(),time:val("f-time"),createdBy:ME,createdAt:Date.now()};
+  if(isBaby) e.diaper=val("f-diaper").trim(); else e.school=val("f-school").trim();
+  STATE.diary.push(e);
+  logActivity(`עדכן/ה מצב רוח/בריאות ל${KIDS[CUR_KID].name}`,"😊");
+  closeSheet(); pushCloud(); render();
+}
+function delDiary(id){ if(!confirm("למחוק רישום?"))return; STATE.diary=STATE.diary.filter(x=>x.id!==id); pushCloud(); render(); }
 
 /* =====================================================================
    מודל / טופס
